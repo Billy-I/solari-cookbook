@@ -12,7 +12,8 @@
 
 ## Global Constraints
 
-- Begin only from an owner-accepted Phase 1 terminal SHA and selected visual direction.
+- Begin only from a reviewed planning checkpoint that descends from the owner-accepted Phase 1 terminal SHA and selected visual direction.
+- The repository must be the official cookbook clone with Billy's fork configured as writable `origin` and `https://github.com/solari-sdk/solari-cookbook.git` retained as `upstream`. Stop before source edits if the fork does not exist or remote ownership is ambiguous.
 - Work Phase 2 only and stop before multi-country live orchestration.
 - Do not expose `SOLARI_API_KEY` to client code, logs, fixtures, errors, screenshots, or commits.
 - Permit public `https:` URLs only. Reject credentials, non-default ports, loopback, link-local, private, reserved, and metadata-network destinations before launch and after redirects.
@@ -21,6 +22,27 @@
 - Cap output sizes and reject malformed provider responses.
 - Make at most three live Solari calls in this phase, only after all mocked checks pass.
 - Stop after the evidence commit; do not push, deploy, or start Phase 3 without separate authority.
+
+---
+
+## Phase 2 preflight gate
+
+Complete this gate before installing the SDK or editing application source:
+
+1. Confirm repository root, clean tracked worktree, branch, `HEAD`, remotes, and exact predecessor. Preserve the untracked Next.js-generated `examples/localelens-web/AGENTS.md` and `examples/localelens-web/CLAUDE.md` unless the owner separately scopes them.
+2. Verify `origin` is Billy's fork of `solari-sdk/solari-cookbook`, `upstream` is the official repository, and the completed Phase 1 branch has remote SHA parity. Do not push to the official upstream.
+3. Create `codex/localelens-phase-2-secure-capture` from the exact reviewed planning checkpoint. Keep Phase 2 commits on that branch.
+4. Recheck the official [Solari quickstart](https://docs.getsolari.com/quickstart), [session lifecycle](https://docs.getsolari.com/sessions), [proxy](https://docs.getsolari.com/proxies), and [recording](https://docs.getsolari.com/recording) documentation. Confirm `@solarisdk/browser@0.1.2` remains the registry `latest` version and that the documented API still matches this plan; stop and revise the plan if either changed.
+5. Billy creates or supplies a Solari `slr_live_` key from the console through an approved local secret path. The executor may verify only redacted presence/absence and must never print, paste, log, commit, or place the value in a `NEXT_PUBLIC_` variable.
+6. Confirm the live-call budget remains at most three. No provider call occurs before mocked tests, typecheck, lint, build, secret scan, and live-mode guards pass.
+
+### Test-target strategy
+
+- Do not create or deploy a second locale website in Phase 2.
+- Use `https://example.com/` for the bounded provider smoke proof. It is intentionally stable and proves that LocaleLens can launch, navigate, extract, screenshot, close, and retrieve replay state through the real Solari system.
+- Accept regional proof only when the returned `browser.proxy` metadata matches the requested country; a successful page response alone is insufficient.
+- Treat content sameness on `example.com` as expected. It does not prove regional content variation.
+- Phase 3 uses a real public locale-sensitive target for the end-to-end multi-country product proof. If that target is blocked or unstable, record `FAIL`, `PARTIAL`, or `NOT PROVEN`; do not silently build or deploy a controlled fixture to manufacture a pass.
 
 ---
 
@@ -49,7 +71,7 @@ examples/localelens-web/
 **Files:**
 - Modify: `examples/localelens-web/package.json`
 - Modify: `examples/localelens-web/package-lock.json`
-- Create: `examples/localelens-web/.env.example`
+- Modify: `examples/localelens-web/.env.example`
 - Create: `examples/localelens-web/src/lib/solari.ts`
 
 **Interfaces:**
@@ -248,7 +270,7 @@ npm test -- app/api/captures/route.test.ts 'app/api/replays/[id]/route.test.ts'
 
 - [ ] **Step 3: Implement the smallest route adapters**
 
-Parse with Zod, cap the JSON body at 2 KB, call the domain service, and return stable status codes. The replay route accepts IDs matching `^[A-Za-z0-9_-]{6,128}$` and returns only an HTTPS replay URL supplied by Solari. Do not persist requests or responses.
+Parse with Zod, cap the JSON body at 2 KB, call the domain service, and return stable status codes. The replay route accepts IDs matching `^[A-Za-z0-9_-]{6,128}$` and returns only an HTTPS replay URL supplied by Solari. Create the replay client per request and always call `solari.close()` in `finally`; replay readiness may remain pending while Solari completes its asynchronous upload. Do not persist requests or responses.
 
 - [ ] **Step 4: Verify and commit**
 
@@ -279,7 +301,7 @@ git diff --check
 
 - [ ] **Step 2: Confirm secret-safe local configuration**
 
-Load the real key through the approved local secret path. Confirm `.env*` except `.env.example` is ignored. Use `git diff --cached` and `git grep` to ensure no key value is present.
+Load the real key through the approved local secret path without printing it. Confirm `.env*` except `.env.example` is ignored. Use `git diff --cached`, `git grep`, and production-build inspection to ensure no key value or `NEXT_PUBLIC_SOLARI` alias is present.
 
 - [ ] **Step 3: Spend at most three live calls**
 
@@ -305,6 +327,6 @@ Report the predecessor SHA, terminal SHA, checks, number of live calls, and exac
 - [ ] Unsafe URL and redirect behavior fails closed.
 - [ ] Server-only key boundary is proven by source and build inspection.
 - [ ] Browser and client cleanup passes every failure-path test.
-- [ ] At least one real capture proves requested country, reported proxy, bounded screenshot, evidence, and recording receipt.
+- [ ] At least one real capture proves requested country, matching reported proxy metadata, bounded screenshot, extracted evidence, client/browser cleanup, and recording receipt; replay is either retrieved or honestly recorded as pending within the bounded polling window.
 - [ ] Live call count is three or fewer.
 - [ ] No Phase 3 file or multi-country live orchestration has started.
