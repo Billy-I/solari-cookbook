@@ -33,7 +33,7 @@ type PageLike = {
       route: NavigationRoute,
       request: NavigationRequest,
     ) => Promise<void>,
-  ): Promise<void>;
+  ): Promise<unknown>;
   goto(
     url: string,
     options: { waitUntil: "domcontentloaded"; timeout: number },
@@ -54,11 +54,13 @@ type PageLike = {
 
 type BrowserLike = {
   id: string;
-  proxy?: {
-    country: string;
-    tier?: "residential" | "static" | "mobile";
-    timezoneId: string;
-  };
+  proxy:
+    | {
+        country: string;
+        tier?: "residential" | "static" | "mobile";
+        timezoneId: string;
+      }
+    | undefined;
   newPage(): Promise<PageLike>;
   close(): Promise<void>;
 };
@@ -76,7 +78,7 @@ export type SolariLike = {
 export type CaptureDependencies = {
   createClient: () => SolariLike;
   now: () => Date;
-  resolveHost: ResolveHost;
+  resolveHost?: ResolveHost;
 };
 
 function unsupportedCountry(request: CaptureRequest): boolean {
