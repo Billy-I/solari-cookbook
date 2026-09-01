@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   compareEvidence,
@@ -130,6 +130,36 @@ describe("compareEvidence", () => {
     });
   });
 
+  it("uses locale-invariant lowercasing for language and currency equality", () => {
+    const localeLowercase = vi
+      .spyOn(String.prototype, "toLocaleLowerCase")
+      .mockImplementation(() => {
+        throw new Error("locale-sensitive lowering must not be used");
+      });
+
+    try {
+      const rows = compareEvidence([
+        {
+          country: "us",
+          response: success({ documentLanguage: "EN-gb", currencies: ["gbp"] }),
+        },
+        {
+          country: "gb",
+          response: success({ documentLanguage: "en-GB", currencies: ["GBP"] }),
+        },
+      ]);
+
+      expect(rows.find((row) => row.field === "language")).toMatchObject({
+        kind: "same",
+      });
+      expect(rows.find((row) => row.field === "currency")).toMatchObject({
+        kind: "same",
+      });
+    } finally {
+      localeLowercase.mockRestore();
+    }
+  });
+
   it("marks successful empty evidence as missing", () => {
     const rows = compareEvidence([
       { country: "us", response: success({ title: null }) },
@@ -180,5 +210,22 @@ describe("compareEvidence", () => {
         us: "<img src=x onerror=alert(1)> US",
       },
     });
+  });
+
+  it("is independent of all three-country input permutations", () => {
+    const us = { country: "us" as const, response: success({ title: "US plans" }) };
+    const gb = { country: "gb" as const, response: success({ title: "GB plans" }) };
+    const de = { country: "de" as const, response: success({ title: "DE plans" }) };
+    const expected = compareEvidence([us, gb, de]);
+
+    for (const captures of [
+      [us, de, gb],
+      [gb, us, de],
+      [gb, de, us],
+      [de, us, gb],
+      [de, gb, us],
+    ]) {
+      expect(compareEvidence(captures)).toEqual(expected);
+    }
   });
 });

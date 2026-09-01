@@ -59,7 +59,7 @@ function valueFor(field: ComparedField, evidence: PageEvidence): string | null {
 function normalizeForComparison(field: ComparedField, value: string): string {
   const normalized = value.trim().replace(/\s+/g, " ");
   return field === "language" || field === "currency"
-    ? normalized.toLocaleLowerCase()
+    ? normalized.toLowerCase()
     : normalized;
 }
 
