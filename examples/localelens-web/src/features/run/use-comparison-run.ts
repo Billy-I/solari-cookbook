@@ -225,6 +225,26 @@ function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+async function waitForSettlement(
+  settlement: Promise<void>,
+  signal: AbortSignal,
+): Promise<void> {
+  let rejectForAbort: ((reason: unknown) => void) | undefined;
+  const userAbort = new Promise<never>((_, reject) => {
+    rejectForAbort = reject;
+  });
+  const onAbort = () => rejectForAbort?.(abortReason(signal));
+
+  if (signal.aborted) onAbort();
+  else signal.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    await Promise.race([settlement, userAbort]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
 export function useComparisonRun(
   options: ComparisonRunOptions = {},
 ): ComparisonRun {
@@ -247,9 +267,11 @@ export function useComparisonRun(
   const transportPoolRef = useRef(createCaptureTransportPool());
 
   const abortActive = useCallback(() => {
-    for (const controller of controllersRef.current.values()) {
+    const controllers = [...controllersRef.current.values()];
+    for (const controller of controllers) {
       controller.abort();
     }
+    return controllers.map(({ signal }) => signal);
   }, []);
 
   const releaseController = useCallback(
@@ -344,7 +366,7 @@ export function useComparisonRun(
     async (value: AuditFormValue) => {
       const countries = validateSelectedCountries(value);
       const validatedValue = { ...value, countries };
-      abortActive();
+      const previousSignals = abortActive();
       retryReservationsRef.current.clear();
       const generation = ++generationRef.current;
       const operationId = ++operationIdRef.current;
@@ -373,6 +395,20 @@ export function useComparisonRun(
             ),
           );
         } else {
+          const handoffSignals = previousSignals.filter((signal) =>
+            transportPoolRef.current.hasSignal(signal),
+          );
+          if (handoffSignals.length > 0) {
+            await waitForSettlement(
+              Promise.all(
+                handoffSignals.map((signal) =>
+                  transportPoolRef.current.whenSignalSettled(signal),
+                ),
+              ).then(() => undefined),
+              controller.signal,
+            );
+            if (controller.signal.aborted) throw abortReason(controller.signal);
+          }
           await comparisonRunner(
             validatedValue,
             eventsFor(operationId),

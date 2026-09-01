@@ -78,7 +78,7 @@ Complete this table only with verified Git evidence during execution.
 | 0 | `d304843f5ea0edb5c27829bb2ca30868645bef7a` | `53b73806c6205d8181bf19b7fc0f8cd81e7ad18c` | PASS: 19 tests, typecheck, lint, build, dependency inspection | 0 | Yes |
 | 1 | `53b73806c6205d8181bf19b7fc0f8cd81e7ad18c` | `6ae07c11d58f2fce27e3cdca84b75578968a04cc` | PASS: 33 tests, typecheck, lint, build, Browser at 360/768/1440 | 0 | Yes |
 | 2 | `5691271ce2027ff8e1a61b04a3991ab7e72e088a` | Final Phase 2 branch head (reported after evidence commit) | PASS: 147 tests, typecheck, lint, build, secret inspection, runtime guards, one recorded US capture using Solari's documented residential default with a matching provider-country receipt, and one honest pending replay lookup | 1 capture + 1 replay lookup | No |
-| 3 | `026b6ffe4d3faca5e8c02c29885846675e699cfd` | Current Phase 3 branch head | PASS: 209 tests, typecheck, lint, build, bounded live comparison, replay checks, export safety | 4 capture + 3 replay | No |
+| 3 | `026b6ffe4d3faca5e8c02c29885846675e699cfd` | Current Phase 3 branch head | PASS: 210 tests, typecheck, lint, build, bounded live comparison, replay checks, export safety | 4 capture + 3 replay | No |
 | 4 | Not started | Not started | Not run | 0 | No |
 | 5 | Not started | Not started | Not run | 0 | No |
 

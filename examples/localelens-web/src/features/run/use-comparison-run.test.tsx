@@ -533,9 +533,61 @@ describe("useComparisonRun", () => {
     expect(initialSignal.aborted).toBe(true);
   });
 
+  it("hands released transport capacity to an abort-and-replace run", async () => {
+    const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void input;
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal as AbortSignal;
+        const onAbort = () => reject(signal.reason);
+
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const { result } = renderHook(() => useComparisonRun({ mode: "live" }));
+
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.start(value);
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
+
+    let replacement!: Promise<void>;
+    act(() => {
+      replacement = result.current.start({
+        url: "https://second.example.test/",
+        countries: ["fr", "jp"],
+      });
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(5));
+    });
+    expect(
+      fetch.mock.calls.slice(3).map(([, init]) =>
+        JSON.parse(String(init?.body)),
+      ),
+    ).toEqual([
+      { country: "fr", url: "https://second.example.test/" },
+      { country: "jp", url: "https://second.example.test/" },
+    ]);
+
+    act(() => result.current.cancel());
+    await act(async () => Promise.all([first, replacement]));
+    expect(fetch).toHaveBeenCalledTimes(5);
+  });
+
   it("fails closed at three unresolved transports when a timed-out run is replaced", async () => {
     vi.useFakeTimers();
-    const fetch = vi.fn(() => new Promise<Response>(() => undefined));
+    const transports: Array<{ resolve(response: Response): void }> = [];
+    const fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          transports.push({ resolve });
+        }),
+    );
     vi.stubGlobal("fetch", fetch);
     const { result } = renderHook(() => useComparisonRun({ mode: "live" }));
 
@@ -558,10 +610,17 @@ describe("useComparisonRun", () => {
     });
 
     expect(fetch).toHaveBeenCalledTimes(3);
+    act(() => result.current.cancel());
     await act(async () => replacement);
-    expect(result.current.regions.every(({ stage }) => stage === "failed")).toBe(
-      true,
-    );
+
+    await act(async () => {
+      for (const transport of transports) {
+        transport.resolve(response(sampleCaptureByCountry.us));
+      }
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it.each([
