@@ -18,6 +18,9 @@
 - Do not expose `SOLARI_API_KEY` to client code, logs, fixtures, errors, screenshots, or commits.
 - Permit public `https:` URLs only. Reject credentials, non-default ports, loopback, link-local, private, reserved, and metadata-network destinations before launch and after redirects.
 - One request performs one regional capture. No automatic provider retry.
+- Construct `Solari` with `maxAttempts: 1` and call `launch()` with
+  `retries: 0`; the SDK's documented `maxAttempts` default is `2`, which would
+  otherwise retry transient HTTP failures once.
 - Support only `us`, `gb`, `de`, `fr`, `jp`, and `au`.
 - Cap output sizes and reject malformed provider responses.
 - Make at most three live Solari calls in this phase, only after all mocked checks pass.
@@ -33,6 +36,10 @@ Complete this gate before installing the SDK or editing application source:
 2. Verify `origin` is Billy's fork of `solari-sdk/solari-cookbook`, `upstream` is the official repository, and the completed Phase 1 branch has remote SHA parity. Do not push to the official upstream.
 3. Create `codex/localelens-phase-2-secure-capture` from the exact reviewed planning checkpoint. Keep Phase 2 commits on that branch.
 4. Recheck the official [Solari quickstart](https://docs.getsolari.com/quickstart), [session lifecycle](https://docs.getsolari.com/sessions), [proxy](https://docs.getsolari.com/proxies), and [recording](https://docs.getsolari.com/recording) documentation. Confirm `@solarisdk/browser@0.1.2` remains the registry `latest` version and that the documented API still matches this plan; stop and revise the plan if either changed.
+   The 2026-09-01 recheck confirmed `0.1.2` remains `latest` and the planned
+   `Solari`, `BrowserSession.proxy`, cleanup, and replay APIs remain current.
+   The SDK reference also documents a two-attempt HTTP default, so this plan
+   now requires `maxAttempts: 1` explicitly.
 5. Billy creates or supplies a Solari `slr_live_` key from the console through an approved local secret path. The executor may verify only redacted presence/absence and must never print, paste, log, commit, or place the value in a `NEXT_PUBLIC_` variable.
 6. Confirm the live-call budget remains at most three. No provider call occurs before mocked tests, typecheck, lint, build, secret scan, and live-mode guards pass.
 
@@ -76,7 +83,8 @@ examples/localelens-web/
 
 **Interfaces:**
 - Consumes: `process.env.SOLARI_API_KEY` at request time.
-- Produces: `createSolariClient(): Solari` or a stable configuration error.
+- Produces: `createSolariClient(): Solari` configured with `maxAttempts: 1`, or
+  a stable configuration error.
 
 - [ ] **Step 1: Install only the required runtime dependencies**
 
@@ -99,7 +107,10 @@ npm test -- src/lib/solari.test.ts
 
 - [ ] **Step 4: Implement the narrow factory**
 
-Keep SDK construction in `src/lib/solari.ts`; do not create a module-level client, because cleanup belongs to each request. `.env.example` contains `SOLARI_API_KEY=` and `LIVE_CAPTURE_ENABLED=false`, never a real value.
+Keep SDK construction in `src/lib/solari.ts`; pass `maxAttempts: 1` so the SDK
+cannot perform its documented transient HTTP retry. Do not create a
+module-level client, because cleanup belongs to each request. `.env.example`
+contains `SOLARI_API_KEY=` and `LIVE_CAPTURE_ENABLED=false`, never a real value.
 
 - [ ] **Step 5: Verify and commit**
 
@@ -224,7 +235,14 @@ async function captureRegion(
 
 - [ ] **Step 1: Write failing lifecycle tests with fakes**
 
-Assert exact order: validate input, construct client, launch `{ stealth: true, proxy: country, recording: true }`, set viewport `1280x900`, install a top-level navigation guard, navigate with `waitUntil: "domcontentloaded"` and 30-second timeout, wait a bounded 2 seconds, validate the final URL again, verify `browser.proxy.country`, evaluate evidence, take full-page JPEG at quality 72, build receipt, close browser, close client. Prove the guard aborts a redirect to a non-public destination and both close calls happen when launch, navigation, extraction, screenshot, or receipt construction fails.
+Assert exact order: validate input, construct client, launch `{ stealth: true,
+proxy: country, recording: true, retries: 0 }`, set viewport `1280x900`, install
+a top-level navigation guard, navigate with `waitUntil: "domcontentloaded"` and
+30-second timeout, wait a bounded 2 seconds, validate the final URL again,
+verify `browser.proxy.country`, evaluate evidence, take full-page JPEG at
+quality 72, build receipt, close browser, close client. Prove the guard aborts
+a redirect to a non-public destination and both close calls happen when launch,
+navigation, extraction, screenshot, or receipt construction fails.
 
 - [ ] **Step 2: Confirm RED**
 
