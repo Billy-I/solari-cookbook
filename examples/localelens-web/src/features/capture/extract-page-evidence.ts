@@ -11,7 +11,7 @@ export type ExtractedPageEvidence = {
   httpStatus: number | null;
 };
 
-type ExtractPageEvidenceInput = {
+export type ExtractPageEvidenceInput = {
   finalUrl: string;
   httpStatus: number | null;
 };
