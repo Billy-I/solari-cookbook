@@ -19,6 +19,12 @@ past. Copy one into your project and change the parts you care about.
 | [browser-profiles-ts](examples/browser-profiles-ts) | TypeScript | Log in once, reuse the session forever |
 | [browser-session-recording-py](examples/browser-session-recording-py) | Python | Record a session, download the replay |
 
+### Composed web app
+
+| Example | Language | What it shows |
+| --- | --- | --- |
+| [localelens-web](examples/localelens-web) | TypeScript / Next.js | Phase 0 foundation for regional web-experience comparison |
+
 ### Sandbox
 
 | Example | Language | What it shows |
