@@ -148,6 +148,10 @@ export type SafeCaptureErrorCode =
   (typeof SAFE_CAPTURE_ERROR_CODES)[number];
 export type CaptureFailure = z.infer<typeof captureFailureSchema>;
 export type CaptureResponse = z.infer<typeof captureResponseSchema>;
+export type ComparisonCapture = {
+  country: SupportedCountry;
+  response: CaptureResponse;
+};
 export type CaptureStage = (typeof CAPTURE_STAGES)[number];
 export type ReportResult = z.infer<typeof reportResultSchema>;
 export type Report = z.infer<typeof reportSchema>;
