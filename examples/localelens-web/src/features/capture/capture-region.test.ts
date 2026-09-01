@@ -365,6 +365,87 @@ describe("captureRegion", () => {
     },
   );
 
+  it("closes a browser that resolves after the launch deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const lifecycle = createLifecycle();
+      const log = vi.fn();
+      lifecycle.dependencies.deadlineMs = 100;
+      lifecycle.dependencies.cleanupTimeoutMs = 25;
+      lifecycle.dependencies.log = log;
+      lifecycle.dependencies.requestId = "request-safe-id";
+      let resolveLaunch: ((browser: typeof lifecycle.browser) => void) | undefined;
+      lifecycle.client.launch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLaunch = resolve;
+          }),
+      );
+
+      const resultPromise = captureRegion(
+        { url: "https://example.com/", country: "us" },
+        lifecycle.dependencies,
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      const result = await resultPromise;
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: { code: "NAVIGATION_TIMEOUT" },
+      });
+      expect(lifecycle.client.close).toHaveBeenCalledOnce();
+      expect(lifecycle.browser.close).not.toHaveBeenCalled();
+
+      resolveLaunch?.(lifecycle.browser);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(lifecycle.browser.close).toHaveBeenCalledOnce();
+      expect(log).not.toHaveBeenCalledWith({
+        category: "late_browser_cleanup_failed",
+        requestId: "request-safe-id",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("records only a safe category when late browser cleanup fails", async () => {
+    vi.useFakeTimers();
+    try {
+      const lifecycle = createLifecycle();
+      const log = vi.fn();
+      lifecycle.dependencies.deadlineMs = 100;
+      lifecycle.dependencies.cleanupTimeoutMs = 25;
+      lifecycle.dependencies.log = log;
+      lifecycle.dependencies.requestId = "request-safe-id";
+      let resolveLaunch: ((browser: typeof lifecycle.browser) => void) | undefined;
+      lifecycle.client.launch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLaunch = resolve;
+          }),
+      );
+      lifecycle.browser.close.mockRejectedValueOnce(new Error("session secret"));
+
+      const resultPromise = captureRegion(
+        { url: "https://example.com/", country: "us" },
+        lifecycle.dependencies,
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      await resultPromise;
+      resolveLaunch?.(lifecycle.browser);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(log).toHaveBeenCalledWith({
+        category: "late_browser_cleanup_failed",
+        requestId: "request-safe-id",
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toContain("session secret");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("bounds never-resolving cleanup and reports a failed capture", async () => {
     vi.useFakeTimers();
     try {
