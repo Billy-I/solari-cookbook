@@ -1,12 +1,11 @@
 "use client";
 
-import { Download, Printer } from "lucide-react";
-
 import {
   AuditForm,
   type AuditFormValue,
 } from "@/src/components/audit-form";
 import { ComparisonResults } from "@/src/components/comparison-results";
+import { ExportActions } from "@/src/components/export-actions";
 import { RunReceipt } from "@/src/components/run-receipt";
 import { RunStatus } from "@/src/components/run-status";
 import {
@@ -36,6 +35,7 @@ export default function Page() {
   const statusRegions = run.regions.length > 0 ? run.regions : featuredRegions;
   const evidenceRegions = run.regions.length > 0 ? run.regions : featuredRegions;
   const evidenceMode = run.value === null ? "sample" : run.mode;
+  const evidenceStatus = run.value === null ? "complete" : run.status;
   const hasPendingRegion = run.regions.some(
     ({ stage }) => stage !== "complete" && stage !== "failed",
   );
@@ -95,19 +95,14 @@ export default function Page() {
         >
           <div>
             <p className="eyebrow">Evidence actions</p>
-            <h2 id="evidence-actions-heading">Keep the sample reviewable</h2>
+            <h2 id="evidence-actions-heading">Keep the evidence reviewable</h2>
           </div>
-          <div className="future-actions">
-            <button aria-describedby="future-export-note" disabled type="button">
-              <Download aria-hidden="true" size={17} />
-              Download JSON
-            </button>
-            <button aria-describedby="future-export-note" disabled type="button">
-              <Printer aria-hidden="true" size={17} />
-              Print evidence
-            </button>
-            <p id="future-export-note">Available after Phase 3</p>
-          </div>
+          <ExportActions
+            mode={evidenceMode}
+            regions={evidenceRegions}
+            status={evidenceStatus}
+            target={(run.value ?? featuredValue).url}
+          />
         </section>
       </main>
 

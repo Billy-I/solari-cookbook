@@ -1,0 +1,69 @@
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  :root,
+  body {
+    background: white;
+    color: black;
+  }
+
+  .app-shell {
+    max-width: none;
+    padding: 0;
+  }
+
+  .how-it-works,
+  .run-control,
+  .evidence-actions,
+  .replay-link,
+  .replay-pending,
+  .region-preview img {
+    display: none !important;
+  }
+
+  .product-header,
+  .run-evidence,
+  .results-section,
+  .differences-section,
+  .limitations {
+    border-color: #555;
+  }
+
+  .region-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .region-preview {
+    break-inside: avoid;
+    min-height: 0;
+  }
+
+  .difference-wide {
+    display: block !important;
+  }
+
+  .difference-compact {
+    display: none !important;
+  }
+
+  .table-scroll {
+    overflow: visible;
+  }
+
+  .table-scroll table {
+    font-size: 8pt;
+    min-width: 0;
+  }
+
+  .table-scroll th,
+  .table-scroll td {
+    padding: 6px;
+  }
+
+  .limitations {
+    break-before: auto;
+  }
+}
