@@ -44,43 +44,45 @@ export async function GET(
   let client: ReturnType<typeof createSolariClient> | undefined;
   const requestId = crypto.randomUUID();
   let response: Response;
-  try {
-    client = createSolariClient();
-    const replay = await client.sessions.getReplayUrl(id);
-    if (
-      typeof replay.url !== "string" ||
-      replay.url.length > maxReplayUrlLength
-    ) {
-      throw new Error("invalid replay URL");
-    }
-    const replayUrl = new URL(replay.url);
-
-    if (
-      replayUrl.protocol !== "https:" ||
-      replayUrl.username ||
-      replayUrl.password ||
-      replayUrl.hash ||
-      (replayUrl.port && replayUrl.port !== "443")
-    ) {
-      response = json({ status: "unavailable" }, 502);
-    } else {
-      response = json({ status: "ready", replayUrl: replayUrl.href }, 200);
-    }
-  } catch (error) {
-    if (errorStatus(error) === 404) {
-      response = json({ status: "pending" }, 202);
-    } else {
-      response = json({ status: "unavailable" }, 502);
-    }
-  }
-
   let cleanupFailed = false;
-  if (client) {
+  try {
     try {
-      await client.close();
-    } catch {
-      cleanupFailed = true;
-      logServerEvent("replay_client_cleanup_failed", requestId);
+      client = createSolariClient();
+      const replay = await client.sessions.getReplayUrl(id);
+      if (
+        typeof replay.url !== "string" ||
+        replay.url.length > maxReplayUrlLength
+      ) {
+        throw new Error("invalid replay URL");
+      }
+      const replayUrl = new URL(replay.url);
+
+      if (
+        replayUrl.protocol !== "https:" ||
+        replayUrl.username ||
+        replayUrl.password ||
+        replayUrl.hash ||
+        (replayUrl.port && replayUrl.port !== "443")
+      ) {
+        response = json({ status: "unavailable" }, 502);
+      } else {
+        response = json({ status: "ready", replayUrl: replayUrl.href }, 200);
+      }
+    } catch (error) {
+      if (errorStatus(error) === 404) {
+        response = json({ status: "pending" }, 202);
+      } else {
+        response = json({ status: "unavailable" }, 502);
+      }
+    }
+  } finally {
+    if (client) {
+      try {
+        await client.close();
+      } catch {
+        cleanupFailed = true;
+        logServerEvent("replay_client_cleanup_failed", requestId);
+      }
     }
   }
 

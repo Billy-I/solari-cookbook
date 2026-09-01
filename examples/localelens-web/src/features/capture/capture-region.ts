@@ -147,149 +147,151 @@ export async function captureRegion(
   const run = <T>(operation: () => Promise<T>): Promise<T> =>
     withTimeout(operation, deadlineAt - Date.now());
   let result: CaptureResponse;
+  let cleanupFailed = false;
 
   try {
-    const parsedRequest = captureRequestSchema.safeParse(request);
-    if (!parsedRequest.success) {
-      throw new Error(
-        unsupportedCountry(request) ? "UNSUPPORTED_COUNTRY" : "INVALID_INPUT",
-      );
-    }
-
-    const validatedUrl = await run(() =>
-      validatePublicUrl(parsedRequest.data.url, dependencies.resolveHost),
-    );
-    client = dependencies.createClient();
-    browser = await run(() =>
-      client!.launch({
-        stealth: true,
-        proxy: parsedRequest.data.country,
-        recording: true,
-        retries: 0,
-      }),
-    );
-
-    const page = await run(() => browser!.newPage());
-    await run(() => page.setViewportSize({ width: 1280, height: 900 }));
-    let navigationGuardError: unknown;
-
-    await run(() =>
-      page.route("**/*", async (route, navigationRequest) => {
-        const isTopLevelNavigation =
-          navigationRequest.isNavigationRequest() &&
-          navigationRequest.frame() === page.mainFrame();
-
-        if (!isTopLevelNavigation) {
-          await route.continue();
-          return;
-        }
-
-        try {
-          await run(() =>
-            validatePublicUrl(
-              navigationRequest.url(),
-              dependencies.resolveHost,
-            ),
-          );
-          await route.continue();
-        } catch (error) {
-          navigationGuardError = error;
-          await route.abort("blockedbyclient");
-        }
-      }),
-    );
-
-    let navigationResponse: { status(): number } | null;
     try {
-      navigationResponse = await run(() =>
-        page.goto(validatedUrl.href, {
-          waitUntil: "domcontentloaded",
-          timeout: 30_000,
+      const parsedRequest = captureRequestSchema.safeParse(request);
+      if (!parsedRequest.success) {
+        throw new Error(
+          unsupportedCountry(request) ? "UNSUPPORTED_COUNTRY" : "INVALID_INPUT",
+        );
+      }
+
+      const validatedUrl = await run(() =>
+        validatePublicUrl(parsedRequest.data.url, dependencies.resolveHost),
+      );
+      client = dependencies.createClient();
+      browser = await run(() =>
+        client!.launch({
+          stealth: true,
+          proxy: parsedRequest.data.country,
+          recording: true,
+          retries: 0,
         }),
       );
+
+      const page = await run(() => browser!.newPage());
+      await run(() => page.setViewportSize({ width: 1280, height: 900 }));
+      let navigationGuardError: unknown;
+
+      await run(() =>
+        page.route("**/*", async (route, navigationRequest) => {
+          const isTopLevelNavigation =
+            navigationRequest.isNavigationRequest() &&
+            navigationRequest.frame() === page.mainFrame();
+
+          if (!isTopLevelNavigation) {
+            await route.continue();
+            return;
+          }
+
+          try {
+            await run(() =>
+              validatePublicUrl(
+                navigationRequest.url(),
+                dependencies.resolveHost,
+              ),
+            );
+            await route.continue();
+          } catch (error) {
+            navigationGuardError = error;
+            await route.abort("blockedbyclient");
+          }
+        }),
+      );
+
+      let navigationResponse: { status(): number } | null;
+      try {
+        navigationResponse = await run(() =>
+          page.goto(validatedUrl.href, {
+            waitUntil: "domcontentloaded",
+            timeout: 30_000,
+          }),
+        );
+      } catch (error) {
+        throw navigationGuardError ?? error;
+      }
+
+      await run(() => page.waitForTimeout(2_000));
+      const finalUrl = await run(() =>
+        validatePublicUrl(page.url(), dependencies.resolveHost),
+      );
+      const proxy = browser.proxy;
+      if (
+        !proxy ||
+        proxy.country !== parsedRequest.data.country ||
+        (proxy.tier !== undefined && proxy.tier !== "residential")
+      ) {
+        throw new Error("SOLARI_PROXY_MISMATCH");
+      }
+
+      const extracted = await run(() =>
+        page.evaluate(extractPageEvidence, {
+          finalUrl: finalUrl.href,
+          httpStatus: navigationResponse?.status() ?? null,
+        }),
+      );
+      const screenshotBytes = await run(() =>
+        page.screenshot({
+          type: "jpeg",
+          quality: 72,
+          fullPage: true,
+        }),
+      );
+      if (screenshotBytes.byteLength > 1_500_000) {
+        throw new Error("CAPTURE_FAILED");
+      }
+
+      result = captureResponseSchema.parse({
+        ok: true,
+        evidence: {
+          requestedUrl: validatedUrl.href,
+          ...extracted,
+          capturedAt: dependencies.now().toISOString(),
+        },
+        receipt: {
+          country: parsedRequest.data.country,
+          proxyCountry: proxy.country,
+          proxyTier: "residential",
+          timezoneId: proxy.timezoneId || null,
+          sessionId: browser.id,
+          recordingRequested: true,
+        },
+        screenshot: {
+          mediaType: "image/jpeg",
+          base64: Buffer.from(screenshotBytes).toString("base64"),
+          width: 1280,
+        },
+      });
     } catch (error) {
-      throw navigationGuardError ?? error;
+      result = toSafeCaptureFailure(error);
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "name" in error &&
+        error.name === "TimeoutError"
+      ) {
+        record({ category: "capture_deadline_exceeded", requestId });
+      }
+    }
+  } finally {
+    if (browser) {
+      try {
+        await withTimeout(() => browser!.close(), cleanupTimeoutMs);
+      } catch {
+        cleanupFailed = true;
+        record({ category: "browser_cleanup_failed", requestId });
+      }
     }
 
-    await run(() => page.waitForTimeout(2_000));
-    const finalUrl = await run(() =>
-      validatePublicUrl(page.url(), dependencies.resolveHost),
-    );
-    const proxy = browser.proxy;
-    if (
-      !proxy ||
-      proxy.country !== parsedRequest.data.country ||
-      (proxy.tier !== undefined && proxy.tier !== "residential")
-    ) {
-      throw new Error("SOLARI_PROXY_MISMATCH");
-    }
-
-    const extracted = await run(() =>
-      page.evaluate(extractPageEvidence, {
-        finalUrl: finalUrl.href,
-        httpStatus: navigationResponse?.status() ?? null,
-      }),
-    );
-    const screenshotBytes = await run(() =>
-      page.screenshot({
-        type: "jpeg",
-        quality: 72,
-        fullPage: true,
-      }),
-    );
-    if (screenshotBytes.byteLength > 1_500_000) {
-      throw new Error("CAPTURE_FAILED");
-    }
-
-    result = captureResponseSchema.parse({
-      ok: true,
-      evidence: {
-        requestedUrl: validatedUrl.href,
-        ...extracted,
-        capturedAt: dependencies.now().toISOString(),
-      },
-      receipt: {
-        country: parsedRequest.data.country,
-        proxyCountry: proxy.country,
-        proxyTier: "residential",
-        timezoneId: proxy.timezoneId || null,
-        sessionId: browser.id,
-        recordingRequested: true,
-      },
-      screenshot: {
-        mediaType: "image/jpeg",
-        base64: Buffer.from(screenshotBytes).toString("base64"),
-        width: 1280,
-      },
-    });
-  } catch (error) {
-    result = toSafeCaptureFailure(error);
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "name" in error &&
-      error.name === "TimeoutError"
-    ) {
-      record({ category: "capture_deadline_exceeded", requestId });
-    }
-  }
-
-  let cleanupFailed = false;
-  if (browser) {
-    try {
-      await withTimeout(() => browser!.close(), cleanupTimeoutMs);
-    } catch {
-      cleanupFailed = true;
-      record({ category: "browser_cleanup_failed", requestId });
-    }
-  }
-
-  if (client) {
-    try {
-      await withTimeout(() => client!.close(), cleanupTimeoutMs);
-    } catch {
-      cleanupFailed = true;
-      record({ category: "client_cleanup_failed", requestId });
+    if (client) {
+      try {
+        await withTimeout(() => client!.close(), cleanupTimeoutMs);
+      } catch {
+        cleanupFailed = true;
+        record({ category: "client_cleanup_failed", requestId });
+      }
     }
   }
 
