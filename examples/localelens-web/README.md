@@ -5,9 +5,10 @@ growth teams, localization leads, and QA engineers. It captures bounded,
 reviewable evidence from one public HTTPS page through Solari regional browser
 sessions instead of treating an assumed proxy location as proof.
 
-## Phase 2 status
+## Phase 3 status
 
-Phase 2 implements the secure single-region capture and replay core:
+Phase 3 retains the secure single-region capture and replay core from Phase 2
+and adds the bounded comparison journey:
 
 - the exact official `@solarisdk/browser@0.1.2` package;
 - request-time, server-only `SOLARI_API_KEY` access;
@@ -25,30 +26,41 @@ Phase 2 implements the secure single-region capture and replay core:
 - stable allowlisted client errors with no upstream body or credential data;
 - browser and Solari client cleanup in nested `finally` paths, with bounded
   cleanup waits and redacted category/request-ID observability; and
-- guarded, non-cacheable capture and replay routes.
+- guarded, non-cacheable capture and replay routes;
+- independent live capture for exactly two or three supported countries, with
+  at most three in flight;
+- honest partial results and one-country explicit retry without automatic
+  retry;
+- deterministic comparison rows with a valid compact mobile equivalent;
+- safe ready, pending, and unavailable replay presentation; and
+- hostname-only, privacy-bounded JSON export plus semantic print output.
 
-The implementation and all non-live gates pass at pre-live SHA
-`878636764f30f94def97e3519e9d2d1a4f695a60`. A bounded live proof against
-`example.com` passed with one recorded US session using Solari's documented
-residential default, a matching provider-country receipt, bounded extraction
-and JPEG output, confirmed cleanup, and one honest pending replay lookup. No
-Phase 3 multi-country orchestration has started.
+The Phase 3 implementation and all non-live gates passed at pre-evidence SHA
+`dfe02a8abb563e71bcd34bf7b626232694f31c34`. A bounded live comparison of
+Spotify Premium spent exactly three initial calls for US, GB, and DE plus one
+explicit GB retry after a retryable failure. US and DE remained visible in an
+honest partial state; the GB retry completed the comparison. Direct provider
+country receipts matched all three requests. All three replay lookups remained
+pending, so no ready provider replay URL is claimed.
 
 ## Architecture
 
-One `POST /api/captures` request validates one URL and one supported country,
-creates one Solari client and one browser, captures the bounded result, and
-closes both resources. `GET /api/replays/:id` performs one lookup for the
-bounded temporary replay URL and closes its client in `finally`.
+One `POST /api/captures` request still validates one URL and one supported
+country, creates one Solari client and one browser, captures the bounded
+result, and closes both resources. The client orchestrator independently
+schedules exactly two or three selected countries and merges completion in a
+stable country order. `GET /api/replays/:id` performs one explicit lookup for
+the bounded temporary replay URL and closes its client in `finally`.
 
 The Solari SDK is externalized from Next.js server bundling because its
 Node-specific browser transport must load natively. Both API routes use the
 Node runtime and `Cache-Control: no-store`.
 
 There is no database, account system, queue, background worker, automatic
-retry, analytics pipeline, or model provider. The browser UI remains the
-deterministic Phase 1 sample journey; Phase 3 owns live multi-country client
-orchestration, comparison, retry controls, and export.
+retry, analytics pipeline, or model provider. Sample mode remains deterministic
+and isolated from live mode. Live state is intentionally in browser memory;
+country retry, replay re-check, JSON download, and print are explicit user
+actions.
 
 ## Local setup
 
@@ -61,15 +73,15 @@ node --version
 npm install
 ```
 
-The repository's `.nvmrc` expects Node `v22.20.0`. Phase 2 verification uses
+The repository's `.nvmrc` expects Node `v22.20.0`. Phase 3 verification uses
 the installed compatible Node `v22.22.2`. Application and dependency versions
 are pinned exactly in `package.json` and `package-lock.json`.
 
 Live mode requires a Solari key obtained from
 [`console.getsolari.com`](https://console.getsolari.com) and loaded through a
-local secret path. The qualified Phase 2 proof stored its key in the macOS
-Keychain service `LocaleLens Solari API Key` through Security.framework and
-injected it only into the server process:
+local secret path. The qualified Phase 2 and Phase 3 proofs stored the key in
+the macOS Keychain service `LocaleLens Solari API Key` through
+Security.framework and injected it only into the server process:
 
 ```text
 SOLARI_API_KEY=<local secret only>
@@ -99,12 +111,14 @@ git diff --check
 git status --short --branch
 ```
 
-The live smoke proof is separate from normal verification so tests and builds
-cannot spend provider credit. Phase 2 uses only `https://example.com/`. It can
-prove session launch, requested and reported proxy country, navigation,
-extraction, screenshot bounds, cleanup, recording receipt, and replay state.
-It cannot independently prove the raw optional provider tier field or
-locale-specific content variation.
+The live proof is separate from normal verification so tests and builds cannot
+spend provider credit. Phase 3 used only
+`https://www.spotify.com/premium/`, with an exact four-call capture budget:
+three initial independent country calls and one explicit GB retry. The
+evidence records matching requested/direct provider-country receipts,
+locale-specific results, bounded screenshots, cleanup-path observations, the
+final comparison, and three pending replay lookups. It does not independently
+prove the raw optional provider tier field or a ready replay URL.
 
 ## Security and privacy
 
@@ -122,15 +136,15 @@ locale-specific content variation.
 
 ## Phase boundary
 
-Phase 2 does not implement live two/three-country orchestration, deterministic
-live comparison, explicit country retry UI, exports, release hardening,
-deployment, pull requests, or publication. Those remain later-phase work and
-are not authorized here.
+Phase 3 is complete. Phase 4 hardening, an assistive-technology audit, push,
+pull request, deployment, release, and publication have not started and are
+not authorized here.
 
 See the [execution index](../../docs/EXECUTION_INDEX.md), [approved product and
 system design](../../docs/superpowers/specs/2026-09-01-localelens-design.md),
 [Phase 2 implementation
 plan](../../docs/superpowers/plans/2026-09-01-localelens-phase-2-secure-capture.md),
 [selected visual direction](../../docs/design/localelens-visual-direction.md),
-[Phase 1 evidence](../../docs/evidence/localelens-phase-1.md), and [Phase 2
-evidence](docs/evidence/phase-2.md).
+[Phase 1 evidence](../../docs/evidence/localelens-phase-1.md), [Phase 2
+evidence](docs/evidence/phase-2.md), and [Phase 3
+evidence](docs/evidence/phase-3.md).
