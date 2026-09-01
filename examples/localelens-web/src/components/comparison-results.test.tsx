@@ -25,7 +25,7 @@ describe("ComparisonResults", () => {
     ];
 
     const { rerender } = render(
-      <ComparisonResults onRetry={onRetry} regions={regions} />,
+      <ComparisonResults mode="sample" onRetry={onRetry} regions={regions} />,
     );
 
     expect(screen.getByRole("article", { name: "United States regional evidence" })).toBeVisible();
@@ -35,6 +35,7 @@ describe("ComparisonResults", () => {
 
     rerender(
       <ComparisonResults
+        mode="sample"
         onRetry={onRetry}
         regions={[
           regions[0]!,

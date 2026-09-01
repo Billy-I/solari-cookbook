@@ -13,7 +13,7 @@ describe("RegionResult", () => {
       response: sampleCaptureByCountry.us,
     };
 
-    render(<RegionResult onRetry={vi.fn()} region={region} />);
+    render(<RegionResult mode="sample" onRetry={vi.fn()} region={region} />);
 
     expect(
       screen.getByRole("img", {
@@ -24,6 +24,7 @@ describe("RegionResult", () => {
       "src",
       expect.stringContaining("%2Fsample%2Fus.jpg"),
     );
+    expect(screen.getByText("Sample evidence")).toBeVisible();
   });
 
   it("uses bounded live screenshot bytes rather than a featured sample", () => {
@@ -32,10 +33,6 @@ describe("RegionResult", () => {
       stage: "complete",
       response: {
         ...sampleCaptureByCountry.us,
-        receipt: {
-          ...sampleCaptureByCountry.us.receipt,
-          sessionId: "live-capture-session",
-        },
         screenshot: {
           ...sampleCaptureByCountry.us.screenshot,
           base64: "bGl2ZS1qcGVn",
@@ -43,12 +40,13 @@ describe("RegionResult", () => {
       },
     };
 
-    render(<RegionResult onRetry={vi.fn()} region={region} />);
+    render(<RegionResult mode="live" onRetry={vi.fn()} region={region} />);
 
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
       "data:image/jpeg;base64,bGl2ZS1qcGVn",
     );
+    expect(screen.getByText("Live evidence")).toBeVisible();
   });
 
   it("renders null consent as not detected", () => {
@@ -64,7 +62,7 @@ describe("RegionResult", () => {
       },
     };
 
-    render(<RegionResult onRetry={vi.fn()} region={region} />);
+    render(<RegionResult mode="sample" onRetry={vi.fn()} region={region} />);
 
     expect(screen.getByText("Not detected")).toBeVisible();
     expect(screen.queryByText("None")).not.toBeInTheDocument();
@@ -85,7 +83,7 @@ describe("RegionResult", () => {
       },
     };
 
-    render(<RegionResult onRetry={onRetry} region={region} />);
+    render(<RegionResult mode="sample" onRetry={onRetry} region={region} />);
 
     expect(screen.getByText("CAPTURE_FAILED")).toBeVisible();
     expect(screen.getByText("Sample capture was unavailable.")).toBeVisible();
@@ -97,6 +95,7 @@ describe("RegionResult", () => {
   it("keeps a running card distinct from sample evidence", () => {
     render(
       <RegionResult
+        mode="live"
         onRetry={vi.fn()}
         region={{ country: "de", stage: "navigating", response: null }}
       />,

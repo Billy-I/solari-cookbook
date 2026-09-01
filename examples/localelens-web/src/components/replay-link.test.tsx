@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -29,6 +29,51 @@ describe("ReplayLink", () => {
     );
 
     await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(1));
+  });
+
+  it("re-checks a pending replay only when the user asks and can become ready", async () => {
+    const fetchReplay = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "pending" }), { status: 202 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            status: "ready",
+            replayUrl: "https://replay.example.test/session?token=temporary",
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchReplay);
+
+    render(<ReplayLink sessionId="capture-session-006" />);
+
+    const recheck = await screen.findByRole("button", { name: "Re-check replay" });
+    expect(screen.queryByRole("link", { name: /replay/i })).not.toBeInTheDocument();
+    fireEvent.click(recheck);
+
+    expect(await screen.findByRole("link", { name: "Open replay" })).toBeVisible();
+    expect(fetchReplay).toHaveBeenCalledTimes(2);
+  });
+
+  it("can re-check a pending replay to unavailable", async () => {
+    const fetchReplay = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "pending" }), { status: 202 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "unavailable" }), { status: 503 }),
+      );
+    vi.stubGlobal("fetch", fetchReplay);
+
+    render(<ReplayLink sessionId="capture-session-007" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Re-check replay" }));
+    expect(await screen.findByText("Replay unavailable")).toBeVisible();
+    expect(fetchReplay).toHaveBeenCalledTimes(2);
   });
 
   it("opens only a validated server HTTPS replay URL safely", async () => {

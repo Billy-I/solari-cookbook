@@ -84,6 +84,7 @@ export default function Page() {
         </section>
 
         <ComparisonResults
+          mode={evidenceMode}
           onRetry={(country) => void run.retry(country)}
           regions={evidenceRegions}
         />

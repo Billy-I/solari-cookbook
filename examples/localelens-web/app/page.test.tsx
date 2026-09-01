@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import Page from "@/app/page";
@@ -30,7 +30,12 @@ describe("LocaleLens comparison page", () => {
     expect(
       screen.getAllByRole("article", { name: /regional evidence/i }),
     ).toHaveLength(3);
-    expect(screen.getByText("Sample evidence", { exact: true })).toBeVisible();
+    expect(
+      within(screen.getByRole("region", { name: "Run evidence" })).getByText(
+        "Sample evidence",
+        { exact: true },
+      ),
+    ).toBeVisible();
     expect(
       screen.getByText("Evidence appears as each regional capture settles."),
     ).toBeVisible();
@@ -45,7 +50,12 @@ describe("LocaleLens comparison page", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
     render(<Page />);
 
-    expect(screen.getByText("Sample evidence", { exact: true })).toBeVisible();
+    expect(
+      within(screen.getByRole("region", { name: "Run evidence" })).getByText(
+        "Sample evidence",
+        { exact: true },
+      ),
+    ).toBeVisible();
     expect(
       screen.queryByText("Live Solari capture", { exact: true }),
     ).not.toBeInTheDocument();

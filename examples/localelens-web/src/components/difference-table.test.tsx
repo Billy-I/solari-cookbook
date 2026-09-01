@@ -42,8 +42,19 @@ describe("DifferenceTable", () => {
   it("provides a labeled definition list alternative for compact screens", () => {
     render(<DifferenceTable countries={["us", "gb"]} fields={fields} />);
 
+    const compact = screen.getByLabelText(
+      "Captured field differences by market, compact view",
+    );
+    const currency = within(compact).getByText("Currency");
+    const values = currency.nextElementSibling;
+
+    expect(compact).toBeInstanceOf(HTMLDListElement);
+    expect(currency).toBeInstanceOf(HTMLElement);
+    expect(currency.tagName).toBe("DT");
+    expect(values?.tagName).toBe("DD");
+    expect(values?.firstElementChild).toBeInstanceOf(HTMLDListElement);
     expect(
-      screen.getByLabelText("Captured field differences by market, compact view"),
-    ).toBeInstanceOf(HTMLDListElement);
+      within(values as HTMLElement).getByText("United States").nextElementSibling,
+    ).toHaveTextContent("USD, $");
   });
 });

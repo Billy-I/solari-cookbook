@@ -470,6 +470,14 @@ select {
   margin: 18px 0 0;
 }
 
+.capture-provenance {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
 .secondary-action,
 .future-actions button {
   align-items: center;
@@ -549,6 +557,19 @@ select {
   font-size: 0.8125rem;
   margin-top: 14px;
   min-height: 44px;
+}
+
+.replay-pending {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.replay-pending .replay-state,
+.replay-pending .secondary-action {
+  margin-top: 0;
 }
 
 .replay-link {
@@ -763,30 +784,32 @@ select {
     margin: 0 12px;
   }
 
-  .difference-definition {
+  .difference-compact > dt {
     border: 1px solid var(--rule);
-    display: grid;
-    gap: 8px;
     padding: 12px;
-  }
-
-  .difference-definition > dt {
     font-weight: 750;
   }
 
-  .difference-definition > div {
+  .difference-compact > dd {
+    margin: 0;
+  }
+
+  .difference-compact > dd > dl {
+    border: 1px solid var(--rule);
     display: grid;
     gap: 8px;
     grid-template-columns: minmax(110px, 0.45fr) minmax(0, 1fr);
+    margin: 0;
+    padding: 12px;
   }
 
-  .difference-definition dt,
-  .difference-definition dd {
+  .difference-compact > dd > dl > dt,
+  .difference-compact > dd > dl > dd {
     margin: 0;
     overflow-wrap: anywhere;
   }
 
-  .difference-definition > div dt {
+  .difference-compact > dd > dl > dt {
     color: var(--muted);
   }
 }

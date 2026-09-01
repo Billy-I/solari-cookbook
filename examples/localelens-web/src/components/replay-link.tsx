@@ -1,12 +1,17 @@
 "use client";
 
-import { ExternalLink, LoaderCircle, Unlink } from "lucide-react";
+import { ExternalLink, LoaderCircle, RotateCcw, Unlink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 type ReplayState =
   | { status: "pending" }
   | { status: "ready"; replayUrl: string }
   | { status: "unavailable" };
+
+type SessionReplayState = {
+  sessionId: string;
+  result: ReplayState;
+};
 
 function hasOnlyKeys(value: Record<string, unknown>, keys: string[]): boolean {
   return Object.keys(value).length === keys.length && keys.every((key) => key in value);
@@ -57,18 +62,22 @@ type ReplayLinkProps = {
 };
 
 export function ReplayLink({ sessionId }: ReplayLinkProps) {
-  const [state, setState] = useState<ReplayState>({ status: "pending" });
+  const [state, setState] = useState<SessionReplayState>({
+    result: { status: "pending" },
+    sessionId,
+  });
+  const [recheckCount, setRecheckCount] = useState(0);
   const lookedUpSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (lookedUpSessionRef.current === sessionId) return;
+    if (lookedUpSessionRef.current === sessionId && recheckCount === 0) return;
 
     let controller: AbortController | undefined;
     const lookupTimer = window.setTimeout(() => {
       lookedUpSessionRef.current = sessionId;
       const lookupController = new AbortController();
       controller = lookupController;
-      setState({ status: "pending" });
+      setState({ result: { status: "pending" }, sessionId });
 
       void fetch(`/api/replays/${encodeURIComponent(sessionId)}`, {
         signal: lookupController.signal,
@@ -83,10 +92,14 @@ export function ReplayLink({ sessionId }: ReplayLinkProps) {
           return parseReplayResponse(response.status, body);
         })
         .then((nextState) => {
-          if (!lookupController.signal.aborted) setState(nextState);
+          if (!lookupController.signal.aborted) {
+            setState({ result: nextState, sessionId });
+          }
         })
         .catch(() => {
-          if (!lookupController.signal.aborted) setState({ status: "unavailable" });
+          if (!lookupController.signal.aborted) {
+            setState({ result: { status: "unavailable" }, sessionId });
+          }
         });
     }, 0);
 
@@ -94,13 +107,21 @@ export function ReplayLink({ sessionId }: ReplayLinkProps) {
       window.clearTimeout(lookupTimer);
       controller?.abort();
     };
-  }, [sessionId]);
+  }, [recheckCount, sessionId]);
 
-  if (state.status === "ready") {
+  const result: ReplayState =
+    state.sessionId === sessionId ? state.result : { status: "pending" };
+
+  function recheck() {
+    setState({ result: { status: "pending" }, sessionId });
+    setRecheckCount((count) => count + 1);
+  }
+
+  if (result.status === "ready") {
     return (
       <a
         className="replay-link"
-        href={state.replayUrl}
+        href={result.replayUrl}
         rel="noopener noreferrer"
         target="_blank"
       >
@@ -110,12 +131,18 @@ export function ReplayLink({ sessionId }: ReplayLinkProps) {
     );
   }
 
-  if (state.status === "pending") {
+  if (result.status === "pending") {
     return (
-      <span className="replay-state">
-        <LoaderCircle aria-hidden="true" size={16} />
-        Replay pending
-      </span>
+      <div className="replay-pending">
+        <span className="replay-state">
+          <LoaderCircle aria-hidden="true" size={16} />
+          Replay pending
+        </span>
+        <button className="secondary-action" onClick={recheck} type="button">
+          <RotateCcw aria-hidden="true" size={16} />
+          Re-check replay
+        </button>
+      </div>
     );
   }
 

@@ -4,6 +4,7 @@ import {
   CircleMinus,
   CircleX,
 } from "lucide-react";
+import { Fragment } from "react";
 
 import type { SupportedCountry } from "@/src/features/capture/contracts";
 import type {
@@ -118,21 +119,23 @@ export function DifferenceTable({ countries, fields }: DifferenceTableProps) {
         className="difference-compact"
       >
         {fields.map((row) => (
-          <div className="difference-definition" key={row.field}>
-            <dt>{fieldLabels[row.field]}</dt>
-            {countries.map((country) => (
-              <div key={country}>
-                <dt>{countryNames[country]}</dt>
-                <dd>{valueFor(row, country)}</dd>
-              </div>
-            ))}
-            <div>
-              <dt>Comparison</dt>
-              <dd>
-                <DifferenceKindLabel kind={row.kind} />
-              </dd>
-            </div>
-          </div>
+          <Fragment key={row.field}>
+            <dt className="difference-field">{fieldLabels[row.field]}</dt>
+            <dd>
+              <dl aria-label={`${fieldLabels[row.field]} comparison by market`}>
+                {countries.map((country) => (
+                  <Fragment key={country}>
+                    <dt>{countryNames[country]}</dt>
+                    <dd>{valueFor(row, country)}</dd>
+                  </Fragment>
+                ))}
+                <dt>Comparison</dt>
+                <dd>
+                  <DifferenceKindLabel kind={row.kind} />
+                </dd>
+              </dl>
+            </dd>
+          </Fragment>
         ))}
       </dl>
     </>

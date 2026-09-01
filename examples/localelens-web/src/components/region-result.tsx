@@ -2,7 +2,10 @@ import Image from "next/image";
 import { CircleDashed, RotateCcw, TriangleAlert } from "lucide-react";
 
 import type { SupportedCountry } from "@/src/features/capture/contracts";
-import type { RegionRunState } from "@/src/features/run/use-comparison-run";
+import type {
+  ComparisonRun,
+  RegionRunState,
+} from "@/src/features/run/use-comparison-run";
 import { ReplayLink } from "@/src/components/replay-link";
 
 const countryNames: Record<SupportedCountry, string> = {
@@ -56,16 +59,13 @@ function stageLabel(stage: RegionRunState["stage"]): string {
           : "Closing session";
 }
 
-function isSampleCapture(sessionId: string): boolean {
-  return sessionId.startsWith("synthetic-local-fixture-");
-}
-
 type RegionResultProps = {
+  mode: ComparisonRun["mode"];
   region: RegionRunState;
   onRetry: (country: SupportedCountry) => void;
 };
 
-export function RegionResult({ region, onRetry }: RegionResultProps) {
+export function RegionResult({ mode, region, onRetry }: RegionResultProps) {
   const countryName = countryNames[region.country];
 
   if (!region.response) {
@@ -119,7 +119,7 @@ export function RegionResult({ region, onRetry }: RegionResultProps) {
   const { evidence } = region.response;
   const capturedAt = formatTimestamp(evidence.capturedAt);
   const host = new URL(evidence.requestedUrl).host;
-  const sampleImage = isSampleCapture(region.response.receipt.sessionId)
+  const sampleImage = mode === "sample"
     ? sampleImages[region.country]
     : undefined;
   const liveImage = `data:image/jpeg;base64,${region.response.screenshot.base64}`;
@@ -133,6 +133,9 @@ export function RegionResult({ region, onRetry }: RegionResultProps) {
         <strong>{region.country.toUpperCase()}</strong>
         <span>{countryName}</span>
       </header>
+      <p className="capture-provenance">
+        {mode === "sample" ? "Sample evidence" : "Live evidence"}
+      </p>
       {sampleImage ? (
         <Image
           alt={`${countryName} evidence for ${host}, captured ${capturedAt}`}
@@ -178,7 +181,7 @@ export function RegionResult({ region, onRetry }: RegionResultProps) {
         </div>
       </dl>
       <p className="capture-time">Captured {capturedAt}</p>
-      {!isSampleCapture(region.response.receipt.sessionId) ? (
+      {mode === "live" ? (
         <ReplayLink sessionId={region.response.receipt.sessionId} />
       ) : null}
     </article>

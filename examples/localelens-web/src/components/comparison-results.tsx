@@ -1,15 +1,19 @@
 import type { SupportedCountry } from "@/src/features/capture/contracts";
-import type { RegionRunState } from "@/src/features/run/use-comparison-run";
+import type {
+  ComparisonRun,
+  RegionRunState,
+} from "@/src/features/run/use-comparison-run";
 import { DifferenceTable } from "@/src/components/difference-table";
 import { compareEvidence } from "@/src/features/compare/compare-evidence";
 import { RegionResult } from "@/src/components/region-result";
 
 type ComparisonResultsProps = {
+  mode: ComparisonRun["mode"];
   regions: RegionRunState[];
   onRetry: (country: SupportedCountry) => void;
 };
 
-export function ComparisonResults({ regions, onRetry }: ComparisonResultsProps) {
+export function ComparisonResults({ mode, regions, onRetry }: ComparisonResultsProps) {
   if (regions.length === 0) {
     return null;
   }
@@ -30,7 +34,12 @@ export function ComparisonResults({ regions, onRetry }: ComparisonResultsProps) 
       </div>
       <div className="region-grid">
         {regions.map((region) => (
-          <RegionResult key={region.country} onRetry={onRetry} region={region} />
+          <RegionResult
+            key={region.country}
+            mode={mode}
+            onRetry={onRetry}
+            region={region}
+          />
         ))}
       </div>
       <section aria-labelledby="differences-heading" className="differences-section">
