@@ -3,6 +3,7 @@ export type ServerEventCategory =
   | "capture_deadline_exceeded"
   | "client_cleanup_failed"
   | "late_browser_cleanup_failed"
+  | "late_client_cleanup_failed"
   | "replay_client_cleanup_failed";
 
 export function logServerEvent(

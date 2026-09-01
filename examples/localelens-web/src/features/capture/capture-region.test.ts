@@ -400,6 +400,7 @@ describe("captureRegion", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(lifecycle.browser.close).toHaveBeenCalledOnce();
+      expect(lifecycle.client.close).toHaveBeenCalledTimes(2);
       expect(log).not.toHaveBeenCalledWith({
         category: "late_browser_cleanup_failed",
         requestId: "request-safe-id",
@@ -440,7 +441,49 @@ describe("captureRegion", () => {
         category: "late_browser_cleanup_failed",
         requestId: "request-safe-id",
       });
+      expect(lifecycle.client.close).toHaveBeenCalledTimes(2);
       expect(JSON.stringify(log.mock.calls)).not.toContain("session secret");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("records only a safe category when the late client close fails", async () => {
+    vi.useFakeTimers();
+    try {
+      const lifecycle = createLifecycle();
+      const log = vi.fn();
+      lifecycle.dependencies.deadlineMs = 100;
+      lifecycle.dependencies.cleanupTimeoutMs = 25;
+      lifecycle.dependencies.log = log;
+      lifecycle.dependencies.requestId = "request-safe-id";
+      let resolveLaunch: ((browser: typeof lifecycle.browser) => void) | undefined;
+      lifecycle.client.launch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLaunch = resolve;
+          }),
+      );
+      lifecycle.client.close
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("client secret"));
+
+      const resultPromise = captureRegion(
+        { url: "https://example.com/", country: "us" },
+        lifecycle.dependencies,
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      await resultPromise;
+      resolveLaunch?.(lifecycle.browser);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(lifecycle.browser.close).toHaveBeenCalledOnce();
+      expect(lifecycle.client.close).toHaveBeenCalledTimes(2);
+      expect(log).toHaveBeenCalledWith({
+        category: "late_client_cleanup_failed",
+        requestId: "request-safe-id",
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toContain("client secret");
     } finally {
       vi.useRealTimers();
     }

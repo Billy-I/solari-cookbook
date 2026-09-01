@@ -93,7 +93,8 @@ export type CaptureLogEvent = {
     | "browser_cleanup_failed"
     | "capture_deadline_exceeded"
     | "client_cleanup_failed"
-    | "late_browser_cleanup_failed";
+    | "late_browser_cleanup_failed"
+    | "late_client_cleanup_failed";
   requestId: string;
 };
 
@@ -163,8 +164,9 @@ export async function captureRegion(
         validatePublicUrl(parsedRequest.data.url, dependencies.resolveHost),
       );
       client = dependencies.createClient();
+      const launchClient = client;
       let launchDeadlineExpired = false;
-      const launchPromise = client
+      const launchPromise = launchClient
         .launch({
           stealth: true,
           proxy: parsedRequest.data.country,
@@ -181,6 +183,17 @@ export async function captureRegion(
             } catch {
               record({
                 category: "late_browser_cleanup_failed",
+                requestId,
+              });
+            }
+            try {
+              await withTimeout(
+                () => launchClient.close(),
+                cleanupTimeoutMs,
+              );
+            } catch {
+              record({
+                category: "late_client_cleanup_failed",
                 requestId,
               });
             }
