@@ -26,7 +26,7 @@ export function ComparisonResults({ regions, onRetry }: ComparisonResultsProps) 
           <p className="eyebrow">Regional evidence</p>
           <h2 id="results-heading">What each market rendered</h2>
         </div>
-        <p>Evidence appears as each sample capture settles.</p>
+        <p>Evidence appears as each regional capture settles.</p>
       </div>
       <div className="region-grid">
         {regions.map((region) => (

@@ -88,8 +88,24 @@ describe("AuditForm", () => {
     for (const checkbox of screen.getAllByRole("checkbox")) {
       expect(checkbox).toBeDisabled();
     }
-    expect(
-      screen.getByRole("button", { name: "Compare markets" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Compare markets" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Compare markets" })).not.toBeDisabled();
+  });
+
+  it("preserves Compare focus and ignores repeat activation while busy", () => {
+    const onSubmit = vi.fn();
+    const { rerender } = render(<AuditForm onSubmit={onSubmit} />);
+    const compare = screen.getByRole("button", { name: "Compare markets" });
+    compare.focus();
+
+    rerender(<AuditForm busy onSubmit={onSubmit} />);
+
+    expect(compare).toHaveFocus();
+    fireEvent.click(compare);
+    fireEvent.click(compare);
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

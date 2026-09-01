@@ -31,6 +31,13 @@ describe("LocaleLens comparison page", () => {
       screen.getAllByRole("article", { name: /regional evidence/i }),
     ).toHaveLength(3);
     expect(screen.getByText("Sample evidence", { exact: true })).toBeVisible();
+    expect(
+      screen.getByText("Evidence appears as each regional capture settles."),
+    ).toBeVisible();
+    expect(screen.getByText("Replay availability is temporary.")).toBeVisible();
+    expect(
+      screen.queryByText("Replay unavailable in Phase 1"),
+    ).not.toBeInTheDocument();
   });
 
   it("labels featured fixtures as sample evidence until a live run starts", () => {
@@ -49,7 +56,7 @@ describe("LocaleLens comparison page", () => {
     expect(
       screen.queryByText("Sample evidence", { exact: true }),
     ).not.toBeInTheDocument();
-    expect(screen.getAllByText("Launching browser")).toHaveLength(2);
+    expect(screen.getAllByText("Launching browser")).toHaveLength(4);
     expect(
       screen.queryByRole("article", { name: "United States regional evidence" }),
     ).not.toBeInTheDocument();

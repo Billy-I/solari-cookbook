@@ -63,30 +63,37 @@ export function ReplayLink({ sessionId }: ReplayLinkProps) {
   useEffect(() => {
     if (lookedUpSessionRef.current === sessionId) return;
 
-    lookedUpSessionRef.current = sessionId;
-    const controller = new AbortController();
-    setState({ status: "pending" });
+    let controller: AbortController | undefined;
+    const lookupTimer = window.setTimeout(() => {
+      lookedUpSessionRef.current = sessionId;
+      const lookupController = new AbortController();
+      controller = lookupController;
+      setState({ status: "pending" });
 
-    void fetch(`/api/replays/${encodeURIComponent(sessionId)}`, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        let body: unknown;
-        try {
-          body = await response.json();
-        } catch {
-          return { status: "unavailable" } satisfies ReplayState;
-        }
-        return parseReplayResponse(response.status, body);
+      void fetch(`/api/replays/${encodeURIComponent(sessionId)}`, {
+        signal: lookupController.signal,
       })
-      .then((nextState) => {
-        if (!controller.signal.aborted) setState(nextState);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setState({ status: "unavailable" });
-      });
+        .then(async (response) => {
+          let body: unknown;
+          try {
+            body = await response.json();
+          } catch {
+            return { status: "unavailable" } satisfies ReplayState;
+          }
+          return parseReplayResponse(response.status, body);
+        })
+        .then((nextState) => {
+          if (!lookupController.signal.aborted) setState(nextState);
+        })
+        .catch(() => {
+          if (!lookupController.signal.aborted) setState({ status: "unavailable" });
+        });
+    }, 0);
 
-    return () => controller.abort();
+    return () => {
+      window.clearTimeout(lookupTimer);
+      controller?.abort();
+    };
   }, [sessionId]);
 
   if (state.status === "ready") {

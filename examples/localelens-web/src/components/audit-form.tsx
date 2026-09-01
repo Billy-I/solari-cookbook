@@ -67,6 +67,8 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
+
     const normalizedUrl = url.trim();
 
     if (!isHttpsUrl(normalizedUrl)) {
@@ -123,9 +125,9 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
       </fieldset>
 
       <button
+        aria-disabled={busy || undefined}
         aria-label="Compare markets"
         className="primary-action"
-        disabled={busy}
         type="submit"
       >
         {busy ? "Comparing markets…" : "Compare markets"}

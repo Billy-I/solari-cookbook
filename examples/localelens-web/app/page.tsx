@@ -117,7 +117,7 @@ export default function Page() {
             ? "Sample evidence captured 1 Sep 2026"
             : "Live Solari capture is owner-controlled"}
         </span>
-        <span>Replay unavailable in Phase 1</span>
+        <span>Replay availability is temporary.</span>
         <span>Not a compliance verdict</span>
       </footer>
     </div>
