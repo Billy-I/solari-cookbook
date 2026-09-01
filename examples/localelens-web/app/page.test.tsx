@@ -33,16 +33,22 @@ describe("LocaleLens comparison page", () => {
     expect(screen.getByText("Sample evidence", { exact: true })).toBeVisible();
   });
 
-  it("identifies live provenance and never fills pending live countries with samples", () => {
+  it("labels featured fixtures as sample evidence until a live run starts", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_MODE", "live");
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
     render(<Page />);
 
-    expect(screen.getByText("Live Solari capture", { exact: true })).toBeVisible();
-    expect(screen.queryByText("Sample evidence", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText("Sample evidence", { exact: true })).toBeVisible();
+    expect(
+      screen.queryByText("Live Solari capture", { exact: true }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Compare markets" }));
 
+    expect(screen.getByText("Live Solari capture", { exact: true })).toBeVisible();
+    expect(
+      screen.queryByText("Sample evidence", { exact: true }),
+    ).not.toBeInTheDocument();
     expect(screen.getAllByText("Launching browser")).toHaveLength(2);
     expect(
       screen.queryByRole("article", { name: "United States regional evidence" }),

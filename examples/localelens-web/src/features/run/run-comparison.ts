@@ -119,7 +119,9 @@ export async function runCountryCapture(
   );
 }
 
-function selectedCountries(input: AuditFormValue): SupportedCountry[] {
+export function validateSelectedCountries(
+  input: AuditFormValue,
+): SupportedCountry[] {
   const countries = input.countries as readonly string[];
   const uniqueCountries = new Set(countries);
 
@@ -142,7 +144,7 @@ export async function runComparison(
   events: RunEvents,
   signal: AbortSignal,
 ): Promise<void> {
-  const countries = selectedCountries(input);
+  const countries = validateSelectedCountries(input);
   const url = new URL(input.url.trim()).toString();
 
   const settlements = await Promise.allSettled(

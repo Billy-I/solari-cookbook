@@ -13,6 +13,7 @@ import {
   runComparison,
   runCountryCapture,
   type RunEvents,
+  validateSelectedCountries,
 } from "@/src/features/run/run-comparison";
 import { sampleCaptureByCountry } from "@/src/test/fixtures";
 
@@ -36,12 +37,14 @@ export type ComparisonRun = {
 };
 
 type RunState = Pick<ComparisonRun, "regions" | "status" | "value"> & {
+  generation: number;
   operationIds: Partial<Record<SupportedCountry, number>>;
 };
 
 type RunAction =
   | {
       type: "begin";
+      generation: number;
       operationId: number;
       value: AuditFormValue;
     }
@@ -55,9 +58,11 @@ type RunAction =
   | {
       type: "retry";
       country: SupportedCountry;
+      expectedOperationId: number;
+      generation: number;
       operationId: number;
     }
-  | { type: "cancel"; operationId: number };
+  | { type: "cancel"; generation: number; operationId: number };
 
 type FixtureLookup = (country: SupportedCountry) => CaptureResponse;
 
@@ -87,6 +92,7 @@ const unavailableFixture: CaptureFailure = {
 };
 
 const initialState: RunState = {
+  generation: 0,
   operationIds: {},
   regions: [],
   status: "idle",
@@ -121,6 +127,7 @@ function reducer(state: RunState, action: RunAction): RunState {
   if (action.type === "begin") {
     const countries = [...action.value.countries];
     return {
+      generation: action.generation,
       operationIds: Object.fromEntries(
         countries.map((country) => [country, action.operationId]),
       ),
@@ -137,6 +144,7 @@ function reducer(state: RunState, action: RunAction): RunState {
   if (action.type === "cancel") {
     return {
       ...state,
+      generation: action.generation,
       operationIds: Object.fromEntries(
         state.regions.map(({ country }) => [country, action.operationId]),
       ),
@@ -145,6 +153,20 @@ function reducer(state: RunState, action: RunAction): RunState {
   }
 
   if (action.type === "retry") {
+    const region = state.regions.find(
+      (candidate) => candidate.country === action.country,
+    );
+    if (
+      state.generation !== action.generation ||
+      state.operationIds[action.country] !== action.expectedOperationId ||
+      region?.stage !== "failed" ||
+      !region.response ||
+      region.response.ok ||
+      !region.response.error.retryable
+    ) {
+      return state;
+    }
+
     const regions = state.regions.map((region) =>
       region.country === action.country
         ? { ...region, response: null, stage: "queued" as const }
@@ -212,8 +234,15 @@ export function useComparisonRun(
     mode = configuredMode(),
   } = options;
   const [state, dispatch] = useReducer(reducer, initialState);
+  const generationRef = useRef(0);
   const operationIdRef = useRef(0);
   const controllersRef = useRef(new Map<number, AbortController>());
+  const currentOperationIdsRef = useRef(
+    new Map<SupportedCountry, number>(),
+  );
+  const retryReservationsRef = useRef(
+    new Map<SupportedCountry, number>(),
+  );
 
   const abortActive = useCallback(() => {
     for (const controller of controllersRef.current.values()) {
@@ -222,11 +251,20 @@ export function useComparisonRun(
     controllersRef.current.clear();
   }, []);
 
-  useEffect(() => abortActive, [abortActive]);
+  useEffect(
+    () => () => {
+      abortActive();
+      generationRef.current += 1;
+      currentOperationIdsRef.current.clear();
+      retryReservationsRef.current.clear();
+    },
+    [abortActive],
+  );
 
   const eventsFor = useCallback(
     (operationId: number): RunEvents => ({
       failed(country, error) {
+        if (currentOperationIdsRef.current.get(country) !== operationId) return;
         dispatch({
           country,
           operationId,
@@ -236,6 +274,7 @@ export function useComparisonRun(
         });
       },
       started(country) {
+        if (currentOperationIdsRef.current.get(country) !== operationId) return;
         dispatch({
           country,
           operationId,
@@ -244,6 +283,7 @@ export function useComparisonRun(
         });
       },
       succeeded(country, response) {
+        if (currentOperationIdsRef.current.get(country) !== operationId) return;
         dispatch({
           country,
           operationId,
@@ -283,16 +323,28 @@ export function useComparisonRun(
 
   const start = useCallback(
     async (value: AuditFormValue) => {
+      const countries = validateSelectedCountries(value);
+      const validatedValue = { ...value, countries };
       abortActive();
+      retryReservationsRef.current.clear();
+      const generation = ++generationRef.current;
       const operationId = ++operationIdRef.current;
       const controller = new AbortController();
       controllersRef.current.set(operationId, controller);
-      dispatch({ operationId, type: "begin", value });
+      currentOperationIdsRef.current = new Map(
+        countries.map((country) => [country, operationId]),
+      );
+      dispatch({
+        generation,
+        operationId,
+        type: "begin",
+        value: validatedValue,
+      });
 
       try {
         if (mode === "sample") {
           await Promise.all(
-            value.countries.map((country, index) =>
+            countries.map((country, index) =>
               runSampleCountry(
                 country,
                 index * countryStaggerMs,
@@ -303,7 +355,7 @@ export function useComparisonRun(
           );
         } else {
           await comparisonRunner(
-            value,
+            validatedValue,
             eventsFor(operationId),
             controller.signal,
           );
@@ -320,8 +372,13 @@ export function useComparisonRun(
   const retry = useCallback(
     async (country: SupportedCountry) => {
       const region = state.regions.find((candidate) => candidate.country === country);
+      const expectedOperationId = state.operationIds[country];
       if (
         !state.value ||
+        expectedOperationId === undefined ||
+        generationRef.current !== state.generation ||
+        currentOperationIdsRef.current.get(country) !== expectedOperationId ||
+        retryReservationsRef.current.has(country) ||
         region?.stage !== "failed" ||
         !region.response ||
         region.response.ok ||
@@ -331,9 +388,17 @@ export function useComparisonRun(
       }
 
       const operationId = ++operationIdRef.current;
+      retryReservationsRef.current.set(country, operationId);
+      currentOperationIdsRef.current.set(country, operationId);
       const controller = new AbortController();
       controllersRef.current.set(operationId, controller);
-      dispatch({ country, operationId, type: "retry" });
+      dispatch({
+        country,
+        expectedOperationId,
+        generation: state.generation,
+        operationId,
+        type: "retry",
+      });
 
       try {
         if (mode === "sample") {
@@ -350,14 +415,32 @@ export function useComparisonRun(
         if (!controller.signal.aborted) throw error;
       } finally {
         controllersRef.current.delete(operationId);
+        if (retryReservationsRef.current.get(country) === operationId) {
+          retryReservationsRef.current.delete(country);
+        }
       }
     },
-    [countryRunner, eventsFor, mode, runSampleCountry, state.regions, state.value],
+    [
+      countryRunner,
+      eventsFor,
+      mode,
+      runSampleCountry,
+      state.generation,
+      state.operationIds,
+      state.regions,
+      state.value,
+    ],
   );
 
   const cancel = useCallback(() => {
     abortActive();
-    dispatch({ operationId: ++operationIdRef.current, type: "cancel" });
+    retryReservationsRef.current.clear();
+    const generation = ++generationRef.current;
+    const operationId = ++operationIdRef.current;
+    for (const country of currentOperationIdsRef.current.keys()) {
+      currentOperationIdsRef.current.set(country, operationId);
+    }
+    dispatch({ generation, operationId, type: "cancel" });
   }, [abortActive]);
 
   return {

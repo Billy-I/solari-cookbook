@@ -35,6 +35,7 @@ export default function Page() {
 
   const statusRegions = run.regions.length > 0 ? run.regions : featuredRegions;
   const evidenceRegions = run.regions.length > 0 ? run.regions : featuredRegions;
+  const evidenceMode = run.value === null ? "sample" : run.mode;
   const hasPendingRegion = run.regions.some(
     ({ stage }) => stage !== "complete" && stage !== "failed",
   );
@@ -75,7 +76,7 @@ export default function Page() {
 
         <section aria-label="Run evidence" className="run-evidence">
           <RunReceipt
-            mode={run.mode}
+            mode={evidenceMode}
             status={run.status}
             value={run.value ?? featuredValue}
           />

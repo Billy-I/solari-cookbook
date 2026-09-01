@@ -89,6 +89,7 @@ async function settle(promise: Promise<void>, resolve: () => void) {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -217,6 +218,115 @@ describe("useComparisonRun", () => {
     expect(result.current.status).toBe("complete");
     expect(comparison.calls).toHaveLength(1);
     expect(country.calls).toHaveLength(1);
+  });
+
+  it("rejects a cached retry after a replacement run starts", async () => {
+    const comparison = deferredComparisonRunner();
+    const country = deferredCountryRunner();
+    const { result } = renderHook(() =>
+      useComparisonRun({
+        comparisonRunner: comparison.runner,
+        countryRunner: country.runner,
+        mode: "live",
+      }),
+    );
+    const replacement: AuditFormValue = {
+      url: "https://second.example.test/",
+      countries: ["gb", "jp"],
+    };
+
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.start(value);
+    });
+    fail(comparison.calls[0]!.events, "gb", retryableFailure.error);
+    const cachedRetry = result.current.retry;
+
+    let second!: Promise<void>;
+    act(() => {
+      second = result.current.start(replacement);
+    });
+    act(() => {
+      void cachedRetry("gb");
+    });
+
+    expect(country.calls).toHaveLength(0);
+    expect(result.current.value).toEqual(replacement);
+    expect(result.current.regions.map(({ country: code }) => code)).toEqual([
+      "gb",
+      "jp",
+    ]);
+
+    succeed(comparison.calls[1]!.events, "gb", sampleCaptureByCountry.gb);
+    fail(comparison.calls[1]!.events, "jp", retryableFailure.error);
+    await settle(second, comparison.calls[1]!.resolve);
+    await settle(first, comparison.calls[0]!.resolve);
+
+    expect(result.current.regions.find(({ country: code }) => code === "gb")).toMatchObject(
+      { response: sampleCaptureByCountry.gb, stage: "complete" },
+    );
+  });
+
+  it("rejects a cached retry after cancellation", async () => {
+    const comparison = deferredComparisonRunner();
+    const country = deferredCountryRunner();
+    const { result } = renderHook(() =>
+      useComparisonRun({
+        comparisonRunner: comparison.runner,
+        countryRunner: country.runner,
+        mode: "live",
+      }),
+    );
+
+    let run!: Promise<void>;
+    act(() => {
+      run = result.current.start(value);
+    });
+    fail(comparison.calls[0]!.events, "gb", retryableFailure.error);
+    const cachedRetry = result.current.retry;
+
+    act(() => result.current.cancel());
+    act(() => {
+      void cachedRetry("gb");
+    });
+
+    expect(country.calls).toHaveLength(0);
+    expect(result.current.status).toBe("cancelled");
+    await settle(run, comparison.calls[0]!.resolve);
+  });
+
+  it("reserves a failed country synchronously so same-tick retries issue one request", async () => {
+    const comparison = deferredComparisonRunner();
+    const country = deferredCountryRunner();
+    const { result } = renderHook(() =>
+      useComparisonRun({
+        comparisonRunner: comparison.runner,
+        countryRunner: country.runner,
+        mode: "live",
+      }),
+    );
+
+    let run!: Promise<void>;
+    act(() => {
+      run = result.current.start(value);
+    });
+    succeed(comparison.calls[0]!.events, "us", sampleCaptureByCountry.us);
+    fail(comparison.calls[0]!.events, "gb", retryableFailure.error);
+    succeed(comparison.calls[0]!.events, "de", sampleCaptureByCountry.de);
+    await settle(run, comparison.calls[0]!.resolve);
+
+    let firstRetry!: Promise<void>;
+    let secondRetry!: Promise<void>;
+    act(() => {
+      firstRetry = result.current.retry("gb");
+      secondRetry = result.current.retry("gb");
+    });
+
+    expect(country.calls).toHaveLength(1);
+    succeed(country.calls[0]!.events, "gb", sampleCaptureByCountry.gb);
+    await settle(firstRetry, country.calls[0]!.resolve);
+    await act(async () => secondRetry);
+    expect(result.current.status).toBe("complete");
   });
 
   it("ignores retry requests for countries that are not failed and retryable", async () => {
@@ -358,5 +468,112 @@ describe("useComparisonRun", () => {
     ]);
     expect(comparison.calls).toHaveLength(0);
     expect(country.calls).toHaveLength(0);
+  });
+
+  it.each([
+    ["duplicate", ["us", "us"]],
+    ["fewer than two", ["us"]],
+    ["more than three", ["us", "gb", "de", "fr"]],
+    ["unsupported", ["us", "zz"]],
+  ])("rejects %s countries before sample or live work starts", async (_case, countries) => {
+    for (const mode of ["sample", "live"] as const) {
+      vi.useFakeTimers();
+      const comparisonRunner = vi.fn<ComparisonRunner>(async () => undefined);
+      const countryRunner = vi.fn<CountryRunner>(async () => undefined);
+      const { result, unmount } = renderHook(() =>
+        useComparisonRun({ comparisonRunner, countryRunner, mode }),
+      );
+      const invalidValue = {
+        ...value,
+        countries: countries as AuditFormValue["countries"],
+      };
+      let rejection: unknown;
+
+      await act(async () => {
+        const run = result.current.start(invalidValue).catch((error: unknown) => {
+          rejection = error;
+        });
+        await vi.runAllTimersAsync();
+        await run;
+      });
+
+      expect(rejection).toEqual(
+        new Error("Select exactly 2 or 3 unique supported countries."),
+      );
+      expect(result.current.status).toBe("idle");
+      expect(result.current.regions).toEqual([]);
+      expect(comparisonRunner).not.toHaveBeenCalled();
+      expect(countryRunner).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+      unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects an invalid replacement without aborting or changing the current run", async () => {
+    const comparison = deferredComparisonRunner();
+    const { result } = renderHook(() =>
+      useComparisonRun({ comparisonRunner: comparison.runner, mode: "live" }),
+    );
+    const invalidValue: AuditFormValue = {
+      ...value,
+      countries: ["us", "us"],
+    };
+
+    let run!: Promise<void>;
+    act(() => {
+      run = result.current.start(value);
+    });
+    act(() => comparison.calls[0]!.events.started("us"));
+    let rejection: unknown;
+    void result.current.start(invalidValue).catch((error: unknown) => {
+      rejection = error;
+    });
+    await act(async () => Promise.resolve());
+
+    expect(rejection).toEqual(
+      new Error("Select exactly 2 or 3 unique supported countries."),
+    );
+    expect(comparison.calls).toHaveLength(1);
+    expect(comparison.calls[0]!.signal.aborted).toBe(false);
+    expect(result.current.value).toEqual(value);
+    expect(result.current.regions[0]).toMatchObject({
+      country: "us",
+      stage: "launching",
+    });
+
+    act(() => result.current.cancel());
+    await settle(run, comparison.calls[0]!.resolve);
+  });
+
+  it("invalidates cached retries and abort-ignoring callbacks when unmounted", async () => {
+    const comparison = deferredComparisonRunner();
+    const country = deferredCountryRunner();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { result, unmount } = renderHook(() =>
+      useComparisonRun({
+        comparisonRunner: comparison.runner,
+        countryRunner: country.runner,
+        mode: "live",
+      }),
+    );
+
+    let run!: Promise<void>;
+    act(() => {
+      run = result.current.start(value);
+    });
+    fail(comparison.calls[0]!.events, "gb", retryableFailure.error);
+    const cachedRetry = result.current.retry;
+    const snapshot = result.current.regions;
+
+    unmount();
+    succeed(comparison.calls[0]!.events, "us", sampleCaptureByCountry.us);
+    void cachedRetry("gb");
+    await settle(run, comparison.calls[0]!.resolve);
+
+    expect(comparison.calls[0]!.signal.aborted).toBe(true);
+    expect(country.calls).toHaveLength(0);
+    expect(snapshot.find(({ country }) => country === "us")?.response).toBeNull();
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });
