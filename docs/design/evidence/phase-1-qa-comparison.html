@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LocaleLens Phase 1 visual comparison</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { background: #f7f5f0; color: #1c1d1c; font-family: system-ui, sans-serif; margin: 0; padding: 24px; }
+      header { border-bottom: 1px solid #373936; margin-bottom: 20px; padding-bottom: 16px; }
+      h1 { font-size: 24px; margin: 0 0 6px; }
+      p { color: #62635f; margin: 0; }
+      main { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      figure { margin: 0; min-width: 0; }
+      figcaption { font-size: 13px; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 8px; text-transform: uppercase; }
+      img { background: white; border: 1px solid #c9c6be; display: block; height: auto; width: 100%; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>LocaleLens Phase 1 visual comparison</h1>
+      <p>Selected direction and final 1440x900 browser-rendered implementation in one review surface.</p>
+    </header>
+    <main>
+      <figure>
+        <figcaption>Selected source — Direction A</figcaption>
+        <img alt="Selected LocaleLens Direction A" src="phase-1-option-a.png" />
+      </figure>
+      <figure>
+        <figcaption>Implementation — 1440x900 CSS viewport</figcaption>
+        <img alt="Final LocaleLens implementation at 1440 by 900" src="phase-1-shell-1440x900.jpg" />
+      </figure>
+    </main>
+  </body>
+</html>
