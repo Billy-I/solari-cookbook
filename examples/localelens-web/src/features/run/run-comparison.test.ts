@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AuditFormValue } from "@/src/components/audit-form";
 import type { CaptureResponse } from "@/src/features/capture/contracts";
-import { runComparison } from "@/src/features/run/run-comparison";
+import {
+  runComparison,
+  runCountryCapture,
+} from "@/src/features/run/run-comparison";
 import { sampleCaptureByCountry } from "@/src/test/fixtures";
 
 const input: AuditFormValue = {
@@ -31,6 +34,35 @@ afterEach(() => {
 });
 
 describe("runComparison", () => {
+  it("runs exactly one normalized country request for an explicit retry", async () => {
+    const fetch = vi.fn().mockResolvedValue(response(sampleCaptureByCountry.gb));
+    vi.stubGlobal("fetch", fetch);
+    const runEvents = events();
+
+    await runCountryCapture(
+      "gb",
+      " https://regional.example.test/pricing ",
+      runEvents,
+      new AbortController().signal,
+    );
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/captures",
+      expect.objectContaining({
+        body: JSON.stringify({
+          country: "gb",
+          url: "https://regional.example.test/pricing",
+        }),
+      }),
+    );
+    expect(runEvents.started).toHaveBeenCalledWith("gb");
+    expect(runEvents.succeeded).toHaveBeenCalledWith(
+      "gb",
+      sampleCaptureByCountry.gb,
+    );
+  });
+
   it("posts one normalized request per selected country and emits results as each settles", async () => {
     let resolveUs: ((value: Response) => void) | undefined;
     const us = new Promise<Response>((resolve) => {

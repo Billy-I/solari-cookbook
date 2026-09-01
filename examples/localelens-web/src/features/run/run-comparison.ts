@@ -51,7 +51,7 @@ async function settleRequest<T>(
   }
 }
 
-async function runCountry(
+async function runCountryRequest(
   country: SupportedCountry,
   url: string,
   events: RunEvents,
@@ -105,6 +105,20 @@ async function runCountry(
   else events.failed(country, outcome.error);
 }
 
+export async function runCountryCapture(
+  country: SupportedCountry,
+  url: string,
+  events: RunEvents,
+  signal: AbortSignal,
+): Promise<void> {
+  await runCountryRequest(
+    country,
+    new URL(url.trim()).toString(),
+    events,
+    signal,
+  );
+}
+
 function selectedCountries(input: AuditFormValue): SupportedCountry[] {
   const countries = input.countries as readonly string[];
   const uniqueCountries = new Set(countries);
@@ -132,7 +146,7 @@ export async function runComparison(
   const url = new URL(input.url.trim()).toString();
 
   const settlements = await Promise.allSettled(
-    countries.map((country) => runCountry(country, url, events, signal)),
+    countries.map((country) => runCountryRequest(country, url, events, signal)),
   );
 
   if (signal.aborted) throw abortReason(signal);

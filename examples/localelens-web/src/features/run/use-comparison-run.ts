@@ -1,0 +1,372 @@
+"use client";
+
+import { useCallback, useEffect, useReducer, useRef } from "react";
+
+import type { AuditFormValue } from "@/src/components/audit-form";
+import type {
+  CaptureFailure,
+  CaptureResponse,
+  CaptureStage,
+  SupportedCountry,
+} from "@/src/features/capture/contracts";
+import {
+  runComparison,
+  runCountryCapture,
+  type RunEvents,
+} from "@/src/features/run/run-comparison";
+import { sampleCaptureByCountry } from "@/src/test/fixtures";
+
+export type RegionRunState = {
+  country: SupportedCountry;
+  stage: CaptureStage;
+  response: CaptureResponse | null;
+};
+
+export type ComparisonRunner = typeof runComparison;
+export type CountryRunner = typeof runCountryCapture;
+
+export type ComparisonRun = {
+  mode: "sample" | "live";
+  status: "idle" | "running" | "partial" | "complete" | "cancelled";
+  regions: RegionRunState[];
+  value: AuditFormValue | null;
+  start(value: AuditFormValue): Promise<void>;
+  retry(country: SupportedCountry): Promise<void>;
+  cancel(): void;
+};
+
+type RunState = Pick<ComparisonRun, "regions" | "status" | "value"> & {
+  operationIds: Partial<Record<SupportedCountry, number>>;
+};
+
+type RunAction =
+  | {
+      type: "begin";
+      operationId: number;
+      value: AuditFormValue;
+    }
+  | {
+      type: "advance";
+      country: SupportedCountry;
+      operationId: number;
+      response?: CaptureResponse | null;
+      stage: CaptureStage;
+    }
+  | {
+      type: "retry";
+      country: SupportedCountry;
+      operationId: number;
+    }
+  | { type: "cancel"; operationId: number };
+
+type FixtureLookup = (country: SupportedCountry) => CaptureResponse;
+
+type ComparisonRunOptions = {
+  comparisonRunner?: ComparisonRunner;
+  countryRunner?: CountryRunner;
+  fixtureLookup?: FixtureLookup;
+  mode?: ComparisonRun["mode"];
+};
+
+const stepDelayMs = 60;
+const countryStaggerMs = 40;
+const inProgressStages: CaptureStage[] = [
+  "launching",
+  "navigating",
+  "extracting",
+  "closing",
+];
+
+const unavailableFixture: CaptureFailure = {
+  ok: false,
+  error: {
+    code: "CAPTURE_FAILED",
+    message: "Sample evidence is unavailable for this market.",
+    retryable: false,
+  },
+};
+
+const initialState: RunState = {
+  operationIds: {},
+  regions: [],
+  status: "idle",
+  value: null,
+};
+
+function defaultFixtureLookup(country: SupportedCountry): CaptureResponse {
+  if (country === "us" || country === "gb" || country === "de") {
+    return sampleCaptureByCountry[country];
+  }
+
+  return unavailableFixture;
+}
+
+function configuredMode(): ComparisonRun["mode"] {
+  return process.env.NEXT_PUBLIC_APP_MODE === "live" ? "live" : "sample";
+}
+
+function deriveStatus(regions: RegionRunState[]): RunState["status"] {
+  const settled = regions.filter(
+    ({ stage }) => stage === "complete" || stage === "failed",
+  ).length;
+
+  if (settled === 0) return "running";
+  if (settled < regions.length) return "partial";
+  return regions.every(({ stage }) => stage === "complete")
+    ? "complete"
+    : "partial";
+}
+
+function reducer(state: RunState, action: RunAction): RunState {
+  if (action.type === "begin") {
+    const countries = [...action.value.countries];
+    return {
+      operationIds: Object.fromEntries(
+        countries.map((country) => [country, action.operationId]),
+      ),
+      regions: countries.map((country) => ({
+        country,
+        response: null,
+        stage: "queued",
+      })),
+      status: "running",
+      value: { ...action.value, countries },
+    };
+  }
+
+  if (action.type === "cancel") {
+    return {
+      ...state,
+      operationIds: Object.fromEntries(
+        state.regions.map(({ country }) => [country, action.operationId]),
+      ),
+      status: "cancelled",
+    };
+  }
+
+  if (action.type === "retry") {
+    const regions = state.regions.map((region) =>
+      region.country === action.country
+        ? { ...region, response: null, stage: "queued" as const }
+        : region,
+    );
+
+    return {
+      ...state,
+      operationIds: {
+        ...state.operationIds,
+        [action.country]: action.operationId,
+      },
+      regions,
+      status: deriveStatus(regions),
+    };
+  }
+
+  if (state.operationIds[action.country] !== action.operationId) return state;
+
+  const regions = state.regions.map((region) =>
+    region.country === action.country
+      ? {
+          ...region,
+          response:
+            action.response === undefined ? region.response : action.response,
+          stage: action.stage,
+        }
+      : region,
+  );
+
+  return { ...state, regions, status: deriveStatus(regions) };
+}
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
+}
+
+function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    const onAbort = () => {
+      window.clearTimeout(timeoutId);
+      reject(abortReason(signal));
+    };
+
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+export function useComparisonRun(
+  options: ComparisonRunOptions = {},
+): ComparisonRun {
+  const {
+    comparisonRunner = runComparison,
+    countryRunner = runCountryCapture,
+    fixtureLookup = defaultFixtureLookup,
+    mode = configuredMode(),
+  } = options;
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const operationIdRef = useRef(0);
+  const controllersRef = useRef(new Map<number, AbortController>());
+
+  const abortActive = useCallback(() => {
+    for (const controller of controllersRef.current.values()) {
+      controller.abort();
+    }
+    controllersRef.current.clear();
+  }, []);
+
+  useEffect(() => abortActive, [abortActive]);
+
+  const eventsFor = useCallback(
+    (operationId: number): RunEvents => ({
+      failed(country, error) {
+        dispatch({
+          country,
+          operationId,
+          response: { error, ok: false },
+          stage: "failed",
+          type: "advance",
+        });
+      },
+      started(country) {
+        dispatch({
+          country,
+          operationId,
+          stage: "launching",
+          type: "advance",
+        });
+      },
+      succeeded(country, response) {
+        dispatch({
+          country,
+          operationId,
+          response,
+          stage: "complete",
+          type: "advance",
+        });
+      },
+    }),
+    [],
+  );
+
+  const runSampleCountry = useCallback(
+    async (
+      country: SupportedCountry,
+      staggerMs: number,
+      operationId: number,
+      signal: AbortSignal,
+    ) => {
+      await wait(staggerMs, signal);
+      for (const stage of inProgressStages) {
+        dispatch({ country, operationId, stage, type: "advance" });
+        await wait(stepDelayMs, signal);
+      }
+
+      const response = fixtureLookup(country);
+      dispatch({
+        country,
+        operationId,
+        response,
+        stage: response.ok ? "complete" : "failed",
+        type: "advance",
+      });
+    },
+    [fixtureLookup],
+  );
+
+  const start = useCallback(
+    async (value: AuditFormValue) => {
+      abortActive();
+      const operationId = ++operationIdRef.current;
+      const controller = new AbortController();
+      controllersRef.current.set(operationId, controller);
+      dispatch({ operationId, type: "begin", value });
+
+      try {
+        if (mode === "sample") {
+          await Promise.all(
+            value.countries.map((country, index) =>
+              runSampleCountry(
+                country,
+                index * countryStaggerMs,
+                operationId,
+                controller.signal,
+              ),
+            ),
+          );
+        } else {
+          await comparisonRunner(
+            value,
+            eventsFor(operationId),
+            controller.signal,
+          );
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) throw error;
+      } finally {
+        controllersRef.current.delete(operationId);
+      }
+    },
+    [abortActive, comparisonRunner, eventsFor, mode, runSampleCountry],
+  );
+
+  const retry = useCallback(
+    async (country: SupportedCountry) => {
+      const region = state.regions.find((candidate) => candidate.country === country);
+      if (
+        !state.value ||
+        region?.stage !== "failed" ||
+        !region.response ||
+        region.response.ok ||
+        !region.response.error.retryable
+      ) {
+        return;
+      }
+
+      const operationId = ++operationIdRef.current;
+      const controller = new AbortController();
+      controllersRef.current.set(operationId, controller);
+      dispatch({ country, operationId, type: "retry" });
+
+      try {
+        if (mode === "sample") {
+          await runSampleCountry(country, 0, operationId, controller.signal);
+        } else {
+          await countryRunner(
+            country,
+            state.value.url,
+            eventsFor(operationId),
+            controller.signal,
+          );
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) throw error;
+      } finally {
+        controllersRef.current.delete(operationId);
+      }
+    },
+    [countryRunner, eventsFor, mode, runSampleCountry, state.regions, state.value],
+  );
+
+  const cancel = useCallback(() => {
+    abortActive();
+    dispatch({ operationId: ++operationIdRef.current, type: "cancel" });
+  }, [abortActive]);
+
+  return {
+    cancel,
+    mode,
+    regions: state.regions,
+    retry,
+    start,
+    status: state.status,
+    value: state.value,
+  };
+}

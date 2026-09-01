@@ -1,17 +1,18 @@
 import type { AuditFormValue } from "@/src/components/audit-form";
-import type { SampleRunController } from "@/src/features/run/use-sample-run";
+import type { ComparisonRun } from "@/src/features/run/use-comparison-run";
 
 type RunReceiptProps = {
-  status: SampleRunController["status"];
+  mode: ComparisonRun["mode"];
+  status: ComparisonRun["status"];
   value: AuditFormValue;
 };
 
-export function RunReceipt({ status, value }: RunReceiptProps) {
+export function RunReceipt({ mode, status, value }: RunReceiptProps) {
   return (
     <dl className="receipt-row">
       <div>
         <dt>Run receipt</dt>
-        <dd>{status === "idle" ? "Featured sample" : "Sample mode"}</dd>
+        <dd>{mode === "sample" ? "Sample evidence" : "Live Solari capture"}</dd>
       </div>
       <div>
         <dt>Target host</dt>

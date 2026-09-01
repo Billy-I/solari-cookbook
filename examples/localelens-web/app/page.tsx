@@ -1,7 +1,6 @@
 "use client";
 
 import { Download, Printer } from "lucide-react";
-import { useState } from "react";
 
 import {
   AuditForm,
@@ -10,8 +9,10 @@ import {
 import { ComparisonResults } from "@/src/components/comparison-results";
 import { RunReceipt } from "@/src/components/run-receipt";
 import { RunStatus } from "@/src/components/run-status";
-import type { RegionRunState } from "@/src/features/run/use-sample-run";
-import { useSampleRun } from "@/src/features/run/use-sample-run";
+import {
+  useComparisonRun,
+  type RegionRunState,
+} from "@/src/features/run/use-comparison-run";
 import { sampleCaptureByCountry } from "@/src/test/fixtures";
 
 const featuredCountries = ["us", "gb", "de"] as const;
@@ -30,27 +31,15 @@ const featuredRegions: RegionRunState[] = featuredCountries.map(
 );
 
 export default function Page() {
-  const run = useSampleRun();
-  const [receiptValue, setReceiptValue] =
-    useState<AuditFormValue>(featuredValue);
+  const run = useComparisonRun();
 
   const statusRegions = run.regions.length > 0 ? run.regions : featuredRegions;
-  const evidenceRegions =
-    run.regions.length > 0
-      ? run.regions.map((region) => {
-          if (region.response) {
-            return region;
-          }
-
-          return (
-            featuredRegions.find(({ country }) => country === region.country) ??
-            region
-          );
-        })
-      : featuredRegions;
+  const evidenceRegions = run.regions.length > 0 ? run.regions : featuredRegions;
+  const hasPendingRegion = run.regions.some(
+    ({ stage }) => stage !== "complete" && stage !== "failed",
+  );
 
   function startComparison(value: AuditFormValue) {
-    setReceiptValue(value);
     void run.start(value);
   }
 
@@ -64,8 +53,9 @@ export default function Page() {
         <details className="how-it-works">
           <summary>How it works</summary>
           <p>
-            Compare deterministic sample evidence from one public page across
-            selected markets. No live capture occurs in Phase 1.
+            {run.mode === "sample"
+              ? "Compare deterministic sample evidence from one public page across selected markets."
+              : "Compare live Solari capture evidence from one public page across selected markets."}
           </p>
         </details>
       </header>
@@ -78,13 +68,17 @@ export default function Page() {
           </div>
 
           <AuditForm
-            busy={run.status === "running"}
+            busy={hasPendingRegion}
             onSubmit={startComparison}
           />
         </section>
 
         <section aria-label="Run evidence" className="run-evidence">
-          <RunReceipt status={run.status} value={receiptValue} />
+          <RunReceipt
+            mode={run.mode}
+            status={run.status}
+            value={run.value ?? featuredValue}
+          />
           <RunStatus regions={statusRegions} />
         </section>
 
@@ -117,7 +111,11 @@ export default function Page() {
 
       <footer className="limitations">
         <span>Public pages only</span>
-        <span>Sample evidence captured 1 Sep 2026</span>
+        <span>
+          {run.mode === "sample"
+            ? "Sample evidence captured 1 Sep 2026"
+            : "Live Solari capture is owner-controlled"}
+        </span>
         <span>Replay unavailable in Phase 1</span>
         <span>Not a compliance verdict</span>
       </footer>
