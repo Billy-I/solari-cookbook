@@ -29,9 +29,9 @@ export const pageEvidenceSchema = z
   .object({
     requestedUrl: httpsUrlSchema,
     finalUrl: httpsUrlSchema,
-    title: z.string().max(500).nullable(),
+    title: z.string().max(200).nullable(),
     documentLanguage: z.string().max(35).nullable(),
-    primaryHeading: z.string().max(500).nullable(),
+    primaryHeading: z.string().max(240).nullable(),
     primaryAction: z.string().max(120).nullable(),
     ctas: z.array(z.string().max(120)).max(20),
     currencies: z.array(z.string().max(20)).max(12),
