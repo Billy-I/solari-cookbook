@@ -155,6 +155,69 @@ select {
   width: 100%;
 }
 
+.country-fieldset {
+  border: 0;
+  grid-column: span 3;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.country-fieldset legend {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.country-options {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.country-option {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  cursor: pointer;
+  display: grid;
+  font-size: 0.8125rem;
+  gap: 8px;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  min-height: 44px;
+  padding: 6px 10px;
+}
+
+.country-option:has(input:checked) {
+  border-color: var(--rule-strong);
+}
+
+.country-option:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+.country-option input {
+  accent-color: var(--signal);
+  min-height: auto;
+}
+
+.country-code {
+  font-weight: 750;
+}
+
+.form-alert {
+  background: #fff1ed;
+  border-left: 3px solid var(--signal);
+  color: #7e2418;
+  font-size: 0.875rem;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+}
+
 .primary-action {
   background: var(--signal);
   border: 1px solid var(--signal);
@@ -229,8 +292,78 @@ select {
   margin-left: auto;
 }
 
+.run-status {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.45fr) minmax(0, 3fr);
+}
+
+.run-status-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin: 0;
+  padding: 18px 12px;
+  text-transform: uppercase;
+}
+
+.run-status ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.run-status li {
+  align-items: center;
+  border-left: 1px solid var(--rule);
+  display: grid;
+  font-size: 0.8125rem;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 58px;
+  padding: 16px 12px;
+}
+
+.stage-label {
+  color: var(--muted);
+}
+
+.stage-failed,
+.safe-error {
+  color: #7e2418;
+}
+
+.safe-error {
+  grid-column: 1 / -1;
+}
+
 .results-section {
   border-bottom: 1px solid var(--rule-strong);
+}
+
+.results-heading-row,
+.differences-heading-row,
+.evidence-actions {
+  align-items: end;
+  display: flex;
+  justify-content: space-between;
+  padding: 24px 12px 18px;
+}
+
+.results-heading-row h2,
+.differences-heading-row h2,
+.evidence-actions h2 {
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  letter-spacing: -0.03em;
+  margin: 6px 0 0;
+}
+
+.results-heading-row > p,
+.differences-heading-row > p {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  margin: 0;
 }
 
 .region-grid {
@@ -272,6 +405,136 @@ select {
   width: 100%;
 }
 
+.evidence-list {
+  border-top: 1px solid var(--rule);
+  margin: 14px 0 0;
+}
+
+.evidence-list > div {
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(88px, 0.35fr) minmax(0, 1fr);
+  padding: 10px 0;
+}
+
+.evidence-list dt,
+.capture-time,
+.error-code {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.evidence-list dd {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.capture-time {
+  margin: 12px 0 0;
+}
+
+.region-failure {
+  min-height: 320px;
+}
+
+.secondary-action,
+.future-actions button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  color: var(--text);
+  display: inline-flex;
+  font-weight: 700;
+  gap: 8px;
+  justify-content: center;
+  padding: 0 14px;
+}
+
+.differences-section {
+  border-top: 1px solid var(--rule-strong);
+  padding-bottom: 24px;
+}
+
+.table-scroll {
+  margin: 0 12px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.table-scroll table {
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  min-width: 900px;
+  width: 100%;
+}
+
+.table-scroll caption {
+  clip: rect(0, 0, 0, 0);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.table-scroll th,
+.table-scroll td {
+  border-bottom: 1px solid var(--rule);
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.table-scroll thead th {
+  border-bottom-color: var(--rule-strong);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.table-scroll tbody th {
+  min-width: 130px;
+}
+
+.comparison-state {
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.state-different {
+  color: #9b311f;
+}
+
+.evidence-actions {
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.future-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.future-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.future-actions p {
+  color: var(--muted);
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  margin: 0;
+  text-align: right;
+}
+
 .limitations {
   align-items: center;
   color: var(--muted);
@@ -300,6 +563,7 @@ select {
   }
 
   .field-url,
+  .country-fieldset,
   .primary-action {
     grid-column: span 2;
   }
@@ -319,6 +583,14 @@ select {
 
   .status-row {
     grid-template-columns: 1fr;
+  }
+
+  .run-status {
+    grid-template-columns: 1fr;
+  }
+
+  .run-status-label {
+    border-bottom: 1px solid var(--rule);
   }
 
   .status-row > p + p {
@@ -371,9 +643,14 @@ select {
   }
 
   .field-url,
+  .country-fieldset,
   .primary-action,
   .region-preview:nth-child(3) {
     grid-column: auto;
+  }
+
+  .country-options {
+    grid-template-columns: 1fr;
   }
 
   .receipt-row > div + div,
@@ -390,6 +667,40 @@ select {
     flex-direction: column;
     gap: 8px;
     padding-block: 18px;
+  }
+
+  .run-status ul {
+    grid-template-columns: 1fr;
+  }
+
+  .run-status li {
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .run-status li:first-child {
+    border-top: 0;
+  }
+
+  .results-heading-row,
+  .differences-heading-row,
+  .evidence-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .future-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .future-actions button {
+    width: 100%;
+  }
+
+  .future-actions p {
+    text-align: left;
   }
 }
 

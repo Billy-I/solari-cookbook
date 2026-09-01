@@ -1,27 +1,59 @@
-import Image from "next/image";
+"use client";
 
-const sampleRegions = [
-  {
-    code: "US",
-    name: "United States",
-    image: "/sample/us.jpg",
-    capturedAt: "1 Sep 2026, 12:00 UTC",
-  },
-  {
-    code: "GB",
-    name: "United Kingdom",
-    image: "/sample/gb.jpg",
-    capturedAt: "1 Sep 2026, 12:00 UTC",
-  },
-  {
-    code: "DE",
-    name: "Germany",
-    image: "/sample/de.jpg",
-    capturedAt: "1 Sep 2026, 12:00 UTC",
-  },
-] as const;
+import { Download, Printer } from "lucide-react";
+import { useState } from "react";
+
+import {
+  AuditForm,
+  type AuditFormValue,
+} from "@/src/components/audit-form";
+import { ComparisonResults } from "@/src/components/comparison-results";
+import { RunReceipt } from "@/src/components/run-receipt";
+import { RunStatus } from "@/src/components/run-status";
+import type { RegionRunState } from "@/src/features/run/use-sample-run";
+import { useSampleRun } from "@/src/features/run/use-sample-run";
+import { sampleCaptureByCountry } from "@/src/test/fixtures";
+
+const featuredCountries = ["us", "gb", "de"] as const;
+
+const featuredValue: AuditFormValue = {
+  url: "https://regional.example.test/pricing",
+  countries: [...featuredCountries],
+};
+
+const featuredRegions: RegionRunState[] = featuredCountries.map(
+  (country) => ({
+    country,
+    stage: "complete",
+    response: sampleCaptureByCountry[country],
+  }),
+);
 
 export default function Page() {
+  const run = useSampleRun();
+  const [receiptValue, setReceiptValue] =
+    useState<AuditFormValue>(featuredValue);
+
+  const statusRegions = run.regions.length > 0 ? run.regions : featuredRegions;
+  const evidenceRegions =
+    run.regions.length > 0
+      ? run.regions.map((region) => {
+          if (region.response) {
+            return region;
+          }
+
+          return (
+            featuredRegions.find(({ country }) => country === region.country) ??
+            region
+          );
+        })
+      : featuredRegions;
+
+  function startComparison(value: AuditFormValue) {
+    setReceiptValue(value);
+    void run.start(value);
+  }
+
   return (
     <div className="app-shell">
       <header className="product-header">
@@ -33,109 +65,60 @@ export default function Page() {
           <summary>How it works</summary>
           <p>
             Compare deterministic sample evidence from one public page across
-            selected markets.
+            selected markets. No live capture occurs in Phase 1.
           </p>
         </details>
       </header>
 
       <main>
-        <section
-          aria-label="Run comparison"
-          className="run-control"
-        >
+        <section aria-label="Run comparison" className="run-control">
           <div className="section-heading">
             <p className="eyebrow">Run comparison</p>
-            <h1 id="comparison-heading">
-              Compare the experience by market
-            </h1>
+            <h1>Compare the experience by market</h1>
           </div>
 
-          <div className="control-grid">
-            <label className="field field-url">
-              <span>URL (HTTPS)</span>
-              <input
-                defaultValue="https://regional.example.test/pricing"
-                inputMode="url"
-                name="url"
-                type="url"
-              />
-            </label>
-            {sampleRegions.map((region) => (
-              <label className="field" key={region.code}>
-                <span>{region.name}</span>
-                <select defaultValue={region.code}>
-                  <option value={region.code}>{region.name}</option>
-                </select>
-              </label>
-            ))}
-            <button className="primary-action" type="button">
-              Compare markets
-            </button>
-          </div>
+          <AuditForm
+            busy={run.status === "running"}
+            onSubmit={startComparison}
+          />
         </section>
 
         <section aria-label="Run evidence" className="run-evidence">
-          <dl className="receipt-row">
-            <div>
-              <dt>Run receipt</dt>
-              <dd>Sample mode</dd>
-            </div>
-            <div>
-              <dt>Target host</dt>
-              <dd>regional.example.test</dd>
-            </div>
-            <div>
-              <dt>Date</dt>
-              <dd>1 Sep 2026</dd>
-            </div>
-            <div>
-              <dt>Markets</dt>
-              <dd>3 countries</dd>
-            </div>
-          </dl>
-          <div className="status-row">
-            <p>Status</p>
-            {sampleRegions.map((region) => (
-              <p key={region.code}>
-                <strong>{region.code}</strong> {region.name}
-                <span>Complete</span>
-              </p>
-            ))}
-          </div>
+          <RunReceipt status={run.status} value={receiptValue} />
+          <RunStatus regions={statusRegions} />
         </section>
 
-        <section aria-labelledby="results-heading" className="results-section">
-          <h2 className="sr-only" id="results-heading">
-            Regional results
-          </h2>
-          <div className="region-grid">
-            {sampleRegions.map((region) => (
-              <article
-                aria-label={`${region.name} regional evidence`}
-                className="region-preview"
-                key={region.code}
-              >
-                <header>
-                  <strong>{region.code}</strong>
-                  <span>{region.name}</span>
-                </header>
-                <Image
-                  alt={`${region.name} regional evidence for regional.example.test captured ${region.capturedAt}`}
-                  height={900}
-                  priority
-                  sizes="(max-width: 640px) 100vw, (max-width: 900px) 50vw, 33vw"
-                  src={region.image}
-                  width={1280}
-                />
-              </article>
-            ))}
+        <ComparisonResults
+          onRetry={(country) => void run.retry(country)}
+          regions={evidenceRegions}
+        />
+
+        <section
+          aria-labelledby="evidence-actions-heading"
+          className="evidence-actions"
+        >
+          <div>
+            <p className="eyebrow">Evidence actions</p>
+            <h2 id="evidence-actions-heading">Keep the sample reviewable</h2>
+          </div>
+          <div className="future-actions">
+            <button aria-describedby="future-export-note" disabled type="button">
+              <Download aria-hidden="true" size={17} />
+              Download JSON
+            </button>
+            <button aria-describedby="future-export-note" disabled type="button">
+              <Printer aria-hidden="true" size={17} />
+              Print evidence
+            </button>
+            <p id="future-export-note">Available after Phase 3</p>
           </div>
         </section>
       </main>
 
       <footer className="limitations">
         <span>Public pages only</span>
-        <span>Evidence captured 1 Sep 2026</span>
+        <span>Sample evidence captured 1 Sep 2026</span>
+        <span>Replay unavailable in Phase 1</span>
         <span>Not a compliance verdict</span>
       </footer>
     </div>
