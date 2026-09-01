@@ -110,4 +110,22 @@ describe("extractPageEvidence", () => {
       httpStatus: null,
     });
   });
+
+  it("stops traversing text and CTA candidates at deterministic budgets", () => {
+    document.body.innerHTML = [
+      ...Array.from({ length: 5_100 }, (_, index) => `<p>plain ${index}</p>`),
+      '<p>USD 999 beyond text budget</p>',
+      ...Array.from({ length: 100 }, (_, index) => `<a href="/${index}">Action ${index}</a>`),
+      '<a href="/sentinel">Sentinel action beyond CTA budget</a>',
+    ].join("");
+
+    const result = extractPageEvidence({
+      finalUrl: "https://example.com/",
+      httpStatus: 200,
+    });
+
+    expect(result.currencies).not.toContain("USD");
+    expect(result.priceSnippets).not.toContain("USD 999 beyond text budget");
+    expect(result.ctas).not.toContain("Sentinel action beyond CTA budget");
+  });
 });

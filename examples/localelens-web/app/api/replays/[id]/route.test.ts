@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { client, createSolariClient, getReplayUrl } = vi.hoisted(() => {
+const { client, createSolariClient, getReplayUrl, logServerEvent } = vi.hoisted(() => {
   const getReplayUrl = vi.fn();
   const client = {
     sessions: { getReplayUrl },
@@ -10,10 +10,12 @@ const { client, createSolariClient, getReplayUrl } = vi.hoisted(() => {
     client,
     createSolariClient: vi.fn(() => client),
     getReplayUrl,
+    logServerEvent: vi.fn(),
   };
 });
 
 vi.mock("@/src/lib/solari", () => ({ createSolariClient }));
+vi.mock("@/src/lib/server-observability", () => ({ logServerEvent }));
 
 import { GET } from "@/app/api/replays/[id]/route";
 
@@ -36,6 +38,7 @@ afterEach(() => {
   getReplayUrl.mockReset();
   client.close.mockReset();
   client.close.mockResolvedValue(undefined);
+  logServerEvent.mockReset();
 
   if (originalLiveCaptureEnabled === undefined) {
     delete process.env.LIVE_CAPTURE_ENABLED;
@@ -139,6 +142,40 @@ describe("GET /api/replays/:id", () => {
     expect(response.status).toBe(502);
     expect(await expectNoStore(response)).toEqual({ status: "unavailable" });
     expect(client.close).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { url: 42 },
+    { url: `https://storage.getsolari.com/${"x".repeat(4_100)}` },
+  ])("rejects an unbounded or non-string provider replay URL", async (replay) => {
+    process.env.LIVE_CAPTURE_ENABLED = "true";
+    process.env.SOLARI_API_KEY = "unit-test-key";
+    getReplayUrl.mockResolvedValue(replay);
+
+    const response = await GET(new Request("http://localhost"), routeContext(sessionId));
+
+    expect(response.status).toBe(502);
+    expect(await expectNoStore(response)).toEqual({ status: "unavailable" });
+    expect(client.close).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed and records only a safe category when replay cleanup fails", async () => {
+    process.env.LIVE_CAPTURE_ENABLED = "true";
+    process.env.SOLARI_API_KEY = "unit-test-key";
+    getReplayUrl.mockResolvedValue({
+      url: "https://storage.getsolari.com/replay",
+    });
+    client.close.mockRejectedValueOnce(new Error("cleanup secret"));
+
+    const response = await GET(new Request("http://localhost"), routeContext(sessionId));
+
+    expect(response.status).toBe(502);
+    expect(await expectNoStore(response)).toEqual({ status: "unavailable" });
+    expect(logServerEvent).toHaveBeenCalledWith(
+      "replay_client_cleanup_failed",
+      expect.any(String),
+    );
+    expect(JSON.stringify(logServerEvent.mock.calls)).not.toContain("cleanup secret");
   });
 
   it("returns a stable unavailable state for provider failure", async () => {

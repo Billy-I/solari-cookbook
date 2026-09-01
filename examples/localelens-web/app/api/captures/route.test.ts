@@ -50,6 +50,33 @@ function jsonRequest(body: string): Request {
   });
 }
 
+function streamedRequest(
+  chunks: readonly Uint8Array[],
+  contentLength?: string,
+): Request {
+  let index = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const chunk = chunks[index];
+      index += 1;
+      if (chunk) {
+        controller.enqueue(chunk);
+      } else {
+        controller.close();
+      }
+    },
+  });
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (contentLength !== undefined) headers.set("Content-Length", contentLength);
+
+  return new Request("http://localhost/api/captures", {
+    method: "POST",
+    headers,
+    body,
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+}
+
 async function expectNoStore(response: Response): Promise<unknown> {
   expect(response.headers.get("Cache-Control")).toBe("no-store");
   return response.json();
@@ -128,6 +155,66 @@ describe("POST /api/captures", () => {
       ok: false,
       error: { code: "INVALID_INPUT" },
     });
+  });
+
+  it("rejects an oversized streamed body without a content length", async () => {
+    process.env.LIVE_CAPTURE_ENABLED = "true";
+    process.env.SOLARI_API_KEY = "unit-test-key";
+
+    const response = await POST(
+      streamedRequest([
+        new TextEncoder().encode("x".repeat(2_048)),
+        new TextEncoder().encode("x"),
+      ]),
+    );
+
+    expect(response.status).toBe(413);
+    expect(await expectNoStore(response)).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_INPUT" },
+    });
+    expect(captureRegion).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stream that exceeds a misleading content length", async () => {
+    process.env.LIVE_CAPTURE_ENABLED = "true";
+    process.env.SOLARI_API_KEY = "unit-test-key";
+
+    const response = await POST(
+      streamedRequest(
+        [
+          new TextEncoder().encode("x".repeat(2_048)),
+          new TextEncoder().encode("x"),
+        ],
+        "1",
+      ),
+    );
+
+    expect(response.status).toBe(413);
+    expect(await expectNoStore(response)).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_INPUT" },
+    });
+  });
+
+  it("rejects a declared oversized body before reading its stream", async () => {
+    process.env.LIVE_CAPTURE_ENABLED = "true";
+    process.env.SOLARI_API_KEY = "unit-test-key";
+    const pull = vi.fn();
+    const request = new Request("http://localhost/api/captures", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": "2049",
+      },
+      body: new ReadableStream<Uint8Array>({ pull }),
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(413);
+    expect(pull).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported countries before capture", async () => {

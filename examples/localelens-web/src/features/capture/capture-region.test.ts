@@ -278,12 +278,126 @@ describe("captureRegion", () => {
       throw new Error("cleanup failed");
     });
 
+    const log = vi.fn();
+    lifecycle.dependencies.log = log;
+    lifecycle.dependencies.requestId = "request-safe-id";
+
     const result = await captureRegion(
       { url: "https://example.com/", country: "us" },
       lifecycle.dependencies,
     );
 
-    expect(result.ok).toBe(true);
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "CAPTURE_FAILED" },
+    });
     expect(lifecycle.client.close).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith({
+      category: "browser_cleanup_failed",
+      requestId: "request-safe-id",
+    });
+  });
+
+  it("preserves a primary safe failure when cleanup also fails", async () => {
+    const lifecycle = createLifecycle("navigation");
+    const log = vi.fn();
+    lifecycle.dependencies.log = log;
+    lifecycle.dependencies.requestId = "request-safe-id";
+    lifecycle.browser.close.mockRejectedValueOnce(new Error("cleanup secret"));
+
+    const result = await captureRegion(
+      { url: "https://example.com/", country: "us" },
+      lifecycle.dependencies,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "CAPTURE_FAILED" },
+    });
+    expect(lifecycle.client.close).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith({
+      category: "browser_cleanup_failed",
+      requestId: "request-safe-id",
+    });
+  });
+
+  it.each(["dns", "evaluate", "screenshot"] as const)(
+    "bounds a never-resolving %s phase and initiates cleanup",
+    async (stage) => {
+      vi.useFakeTimers();
+      try {
+        const lifecycle = createLifecycle();
+        lifecycle.dependencies.deadlineMs = 100;
+        lifecycle.dependencies.cleanupTimeoutMs = 25;
+        if (stage === "dns") {
+          lifecycle.dependencies.resolveHost = async () => new Promise(() => {});
+        } else if (stage === "evaluate") {
+          lifecycle.page.evaluate.mockImplementationOnce(
+            async () => new Promise(() => {}),
+          );
+        } else {
+          lifecycle.page.screenshot.mockImplementationOnce(
+            async () => new Promise(() => {}),
+          );
+        }
+
+        const resultPromise = captureRegion(
+          { url: "https://example.com/", country: "us" },
+          lifecycle.dependencies,
+        );
+        await vi.advanceTimersByTimeAsync(100);
+        const result = await resultPromise;
+
+        expect(result).toMatchObject({
+          ok: false,
+          error: { code: "NAVIGATION_TIMEOUT" },
+        });
+        if (stage === "dns") {
+          expect(lifecycle.browser.close).not.toHaveBeenCalled();
+          expect(lifecycle.client.close).not.toHaveBeenCalled();
+        } else {
+          expect(lifecycle.browser.close).toHaveBeenCalledOnce();
+          expect(lifecycle.client.close).toHaveBeenCalledOnce();
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("bounds never-resolving cleanup and reports a failed capture", async () => {
+    vi.useFakeTimers();
+    try {
+      const lifecycle = createLifecycle();
+      const log = vi.fn();
+      lifecycle.dependencies.deadlineMs = 100;
+      lifecycle.dependencies.cleanupTimeoutMs = 25;
+      lifecycle.dependencies.log = log;
+      lifecycle.dependencies.requestId = "request-safe-id";
+      lifecycle.browser.close.mockImplementationOnce(async () => new Promise(() => {}));
+      lifecycle.client.close.mockImplementationOnce(async () => new Promise(() => {}));
+
+      const resultPromise = captureRegion(
+        { url: "https://example.com/", country: "us" },
+        lifecycle.dependencies,
+      );
+      await vi.advanceTimersByTimeAsync(50);
+      const result = await resultPromise;
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: { code: "CAPTURE_FAILED" },
+      });
+      expect(log).toHaveBeenCalledWith({
+        category: "browser_cleanup_failed",
+        requestId: "request-safe-id",
+      });
+      expect(log).toHaveBeenCalledWith({
+        category: "client_cleanup_failed",
+        requestId: "request-safe-id",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

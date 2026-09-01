@@ -7,11 +7,49 @@ import {
 } from "@/src/features/capture/contracts";
 import { toSafeCaptureFailure } from "@/src/features/capture/safe-error";
 import { createSolariClient } from "@/src/lib/solari";
+import { logServerEvent } from "@/src/lib/server-observability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const noStoreHeaders = { "Cache-Control": "no-store" };
+const maxBodyBytes = 2_048;
+
+class BodyTooLargeError extends Error {}
+
+async function readBoundedBody(request: Request): Promise<string> {
+  const contentLength = request.headers.get("Content-Length");
+  if (contentLength !== null) {
+    if (!/^\d+$/.test(contentLength)) throw new Error("invalid length");
+    if (BigInt(contentLength) > BigInt(maxBodyBytes)) {
+      await request.body?.cancel().catch(() => undefined);
+      throw new BodyTooLargeError();
+    }
+  }
+
+  if (!request.body) return "";
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let byteLength = 0;
+  let value = "";
+
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      byteLength += next.value.byteLength;
+      if (byteLength > maxBodyBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new BodyTooLargeError();
+      }
+      value += decoder.decode(next.value, { stream: true });
+    }
+    return value + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 function json(body: unknown, status: number): Response {
   return Response.json(body, { status, headers: noStoreHeaders });
@@ -50,13 +88,12 @@ export async function POST(request: Request): Promise<Response> {
 
   let rawBody: string;
   try {
-    rawBody = await request.text();
-  } catch {
+    rawBody = await readBoundedBody(request);
+  } catch (error) {
+    if (error instanceof BodyTooLargeError) {
+      return failure("INVALID_INPUT", 413);
+    }
     return failure("INVALID_INPUT", 400);
-  }
-
-  if (new TextEncoder().encode(rawBody).byteLength > 2_048) {
-    return failure("INVALID_INPUT", 413);
   }
 
   let body: unknown;
@@ -86,6 +123,8 @@ export async function POST(request: Request): Promise<Response> {
     const result = await captureRegion(parsedRequest.data, {
       createClient: createSolariClient,
       now: () => new Date(),
+      requestId: crypto.randomUUID(),
+      log: ({ category, requestId }) => logServerEvent(category, requestId),
     });
     return json(result, result.ok ? 200 : failureStatus(result.error.code));
   } catch (error) {

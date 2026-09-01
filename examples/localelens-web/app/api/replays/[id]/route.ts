@@ -1,9 +1,11 @@
 import { createSolariClient } from "@/src/lib/solari";
+import { logServerEvent } from "@/src/lib/server-observability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const replayIdPattern = /^[A-Za-z0-9_.:-]{6,500}$/;
+const maxReplayUrlLength = 4_096;
 const noStoreHeaders = { "Cache-Control": "no-store" };
 
 type ReplayContext = {
@@ -40,9 +42,17 @@ export async function GET(
   }
 
   let client: ReturnType<typeof createSolariClient> | undefined;
+  const requestId = crypto.randomUUID();
+  let response: Response;
   try {
     client = createSolariClient();
     const replay = await client.sessions.getReplayUrl(id);
+    if (
+      typeof replay.url !== "string" ||
+      replay.url.length > maxReplayUrlLength
+    ) {
+      throw new Error("invalid replay URL");
+    }
     const replayUrl = new URL(replay.url);
 
     if (
@@ -52,23 +62,31 @@ export async function GET(
       replayUrl.hash ||
       (replayUrl.port && replayUrl.port !== "443")
     ) {
-      return json({ status: "unavailable" }, 502);
+      response = json({ status: "unavailable" }, 502);
+    } else {
+      response = json({ status: "ready", replayUrl: replayUrl.href }, 200);
     }
-
-    return json({ status: "ready", replayUrl: replayUrl.href }, 200);
   } catch (error) {
     if (errorStatus(error) === 404) {
-      return json({ status: "pending" }, 202);
-    }
-
-    return json({ status: "unavailable" }, 502);
-  } finally {
-    if (client) {
-      try {
-        await client.close();
-      } catch {
-        // Cleanup errors never replace the replay lookup result.
-      }
+      response = json({ status: "pending" }, 202);
+    } else {
+      response = json({ status: "unavailable" }, 502);
     }
   }
+
+  let cleanupFailed = false;
+  if (client) {
+    try {
+      await client.close();
+    } catch {
+      cleanupFailed = true;
+      logServerEvent("replay_client_cleanup_failed", requestId);
+    }
+  }
+
+  if (cleanupFailed && response.status < 400) {
+    return json({ status: "unavailable" }, 502);
+  }
+
+  return response;
 }
