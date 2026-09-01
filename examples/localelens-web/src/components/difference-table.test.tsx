@@ -1,23 +1,21 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import {
   DifferenceTable,
-  type ComparedField,
 } from "@/src/components/difference-table";
+import type { DifferenceRow } from "@/src/features/compare/compare-evidence";
 
-const fields: ComparedField[] = [
+const fields: DifferenceRow[] = [
   {
-    field: "currencies",
-    label: "Currency",
-    state: "different",
-    values: { us: ["USD", "$"], gb: ["GBP", "£"] },
+    field: "currency",
+    kind: "different",
+    values: { us: "USD, $", gb: "GBP, £" },
   },
   {
-    field: "primaryHeading",
-    label: "Primary heading",
-    state: "match",
-    values: { us: ["Plans"], gb: ["Plans"] },
+    field: "heading",
+    kind: "same",
+    values: { us: "Plans", gb: "Plans" },
   },
 ];
 
@@ -28,14 +26,24 @@ describe("DifferenceTable", () => {
     expect(
       screen.getByRole("columnheader", { name: "United States" }),
     ).toHaveAttribute("scope", "col");
-    expect(
-      screen.getByRole("rowheader", { name: "Currency" }),
-    ).toHaveAttribute("scope", "row");
+    expect(screen.getByRole("rowheader", { name: "Currency" })).toHaveAttribute(
+      "scope",
+      "row",
+    );
     expect(screen.getByRole("cell", { name: "United States: USD, $" })).toHaveAttribute(
       "headers",
-      "field-currencies country-us",
+      "field-currency country-us",
     );
-    expect(screen.getByText("Different")).toBeVisible();
-    expect(screen.getByText("Match")).toBeVisible();
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Different")).toBeVisible();
+    expect(within(table).getByText("Same")).toBeVisible();
+  });
+
+  it("provides a labeled definition list alternative for compact screens", () => {
+    render(<DifferenceTable countries={["us", "gb"]} fields={fields} />);
+
+    expect(
+      screen.getByLabelText("Captured field differences by market, compact view"),
+    ).toBeInstanceOf(HTMLDListElement);
   });
 });

@@ -1,26 +1,15 @@
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleMinus,
+  CircleX,
+} from "lucide-react";
+
+import type { SupportedCountry } from "@/src/features/capture/contracts";
 import type {
-  PageEvidence,
-  SupportedCountry,
-} from "@/src/features/capture/contracts";
-import type { RegionRunState } from "@/src/features/run/use-sample-run";
-
-export type ComparisonState = "match" | "different" | "unavailable";
-
-export type ComparedField = {
-  field:
-    | "finalUrl"
-    | "title"
-    | "documentLanguage"
-    | "primaryHeading"
-    | "primaryAction"
-    | "ctas"
-    | "currencies"
-    | "priceSnippets"
-    | "consentText";
-  label: string;
-  state: ComparisonState;
-  values: Partial<Record<SupportedCountry, string[]>>;
-};
+  DifferenceKind,
+  DifferenceRow,
+} from "@/src/features/compare/compare-evidence";
 
 const countryNames: Record<SupportedCountry, string> = {
   us: "United States",
@@ -31,111 +20,121 @@ const countryNames: Record<SupportedCountry, string> = {
   au: "Australia",
 };
 
-const fieldDefinitions: Array<{
-  field: ComparedField["field"];
-  label: string;
-}> = [
-  { field: "finalUrl", label: "Final URL" },
-  { field: "documentLanguage", label: "Language" },
-  { field: "primaryHeading", label: "Primary heading" },
-  { field: "primaryAction", label: "Primary action" },
-  { field: "currencies", label: "Currency" },
-  { field: "priceSnippets", label: "Price" },
-  { field: "consentText", label: "Consent" },
-];
+const fieldLabels: Record<DifferenceRow["field"], string> = {
+  final_url: "Final URL",
+  title: "Title",
+  language: "Language",
+  currency: "Currency",
+  price: "Price",
+  heading: "Primary heading",
+  primary_action: "Primary action",
+  consent: "Consent",
+};
 
-function toValues(value: PageEvidence[ComparedField["field"]]): string[] {
-  if (Array.isArray(value)) {
-    return value.length > 0 ? [...new Set(value)] : ["Not detected"];
-  }
+const kindLabels: Record<DifferenceKind, string> = {
+  same: "Same",
+  different: "Different",
+  missing: "Missing",
+  unavailable: "Unavailable",
+};
 
-  return [value ?? "Not detected"];
+function DifferenceKindLabel({ kind }: { kind: DifferenceKind }) {
+  const Icon =
+    kind === "same"
+      ? CircleCheck
+      : kind === "different"
+        ? CircleAlert
+        : kind === "missing"
+          ? CircleX
+          : CircleMinus;
+
+  return (
+    <span className={`comparison-state state-${kind}`}>
+      <Icon aria-hidden="true" size={16} />
+      {kindLabels[kind]}
+    </span>
+  );
 }
 
-function normalized(values: string[]): string {
-  return values
-    .map((value) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase())
-    .join("\u0000");
-}
-
-export function compareRegions(regions: RegionRunState[]): ComparedField[] {
-  return fieldDefinitions.map(({ field, label }) => {
-    const values: ComparedField["values"] = {};
-
-    for (const region of regions) {
-      if (region.response?.ok) {
-        values[region.country] = toValues(region.response.evidence[field]);
-      }
-    }
-
-    const available = regions
-      .map(({ country }) => values[country])
-      .filter((value): value is string[] => value !== undefined);
-    const state: ComparisonState =
-      available.length !== regions.length
-        ? "unavailable"
-        : new Set(available.map(normalized)).size === 1
-          ? "match"
-          : "different";
-
-    return { field, label, state, values };
-  });
+function valueFor(row: DifferenceRow, country: SupportedCountry): string {
+  return row.values[country] ?? "Unavailable";
 }
 
 type DifferenceTableProps = {
   countries: SupportedCountry[];
-  fields: ComparedField[];
+  fields: DifferenceRow[];
 };
 
 export function DifferenceTable({ countries, fields }: DifferenceTableProps) {
   return (
-    <div className="table-scroll" tabIndex={0}>
-      <table>
-        <caption>Captured field differences by market</caption>
-        <thead>
-          <tr>
-            <th id="field-column" scope="col">
-              Evidence
-            </th>
-            {countries.map((country) => (
-              <th id={`country-${country}`} key={country} scope="col">
-                {countryNames[country]}
-              </th>
-            ))}
-            <th id="comparison-column" scope="col">
-              Comparison
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {fields.map((field) => (
-            <tr key={field.field}>
-              <th id={`field-${field.field}`} scope="row">
-                {field.label}
+    <>
+      <div className="table-scroll difference-wide" tabIndex={0}>
+        <table>
+          <caption>Captured field differences by market</caption>
+          <thead>
+            <tr>
+              <th id="field-column" scope="col">
+                Evidence
               </th>
               {countries.map((country) => (
-                <td
-                  aria-label={`${countryNames[country]}: ${(field.values[country] ?? ["Unavailable"]).join(", ")}`}
-                  headers={`field-${field.field} country-${country}`}
-                  key={country}
-                >
-                  {(field.values[country] ?? ["Unavailable"]).join(", ")}
-                </td>
+                <th id={`country-${country}`} key={country} scope="col">
+                  {countryNames[country]}
+                </th>
               ))}
-              <td
-                className={`comparison-state state-${field.state}`}
-                headers={`field-${field.field} comparison-column`}
-              >
-                {field.state === "match"
-                  ? "Match"
-                  : field.state === "different"
-                    ? "Different"
-                    : "Unavailable"}
-              </td>
+              <th id="comparison-column" scope="col">
+                Comparison
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {fields.map((row) => (
+              <tr key={row.field}>
+                <th id={`field-${row.field}`} scope="row">
+                  {fieldLabels[row.field]}
+                </th>
+                {countries.map((country) => {
+                  const value = valueFor(row, country);
+                  return (
+                    <td
+                      aria-label={`${countryNames[country]}: ${value}`}
+                      headers={`field-${row.field} country-${country}`}
+                      key={country}
+                    >
+                      {value}
+                    </td>
+                  );
+                })}
+                <td headers={`field-${row.field} comparison-column`}>
+                  <DifferenceKindLabel kind={row.kind} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <dl
+        aria-label="Captured field differences by market, compact view"
+        className="difference-compact"
+      >
+        {fields.map((row) => (
+          <div className="difference-definition" key={row.field}>
+            <dt>{fieldLabels[row.field]}</dt>
+            {countries.map((country) => (
+              <div key={country}>
+                <dt>{countryNames[country]}</dt>
+                <dd>{valueFor(row, country)}</dd>
+              </div>
+            ))}
+            <div>
+              <dt>Comparison</dt>
+              <dd>
+                <DifferenceKindLabel kind={row.kind} />
+              </dd>
+            </div>
+          </div>
+        ))}
+      </dl>
+    </>
   );
 }

@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { RunStatus } from "@/src/components/run-status";
-import type { RegionRunState } from "@/src/features/run/use-sample-run";
+import type { RegionRunState } from "@/src/features/run/use-comparison-run";
 
 const regions: RegionRunState[] = [
   { country: "us", stage: "complete", response: null },
@@ -34,5 +34,24 @@ describe("RunStatus", () => {
     expect(within(status).getByText("Germany")).toBeVisible();
     expect(within(status).getByText("Failed")).toBeVisible();
     expect(within(status).getByText("Sample capture was unavailable.")).toBeVisible();
+  });
+
+  it("does not move focus when loading status is announced", () => {
+    function StatusHarness({ showStatus }: { showStatus: boolean }) {
+      return (
+        <>
+          <button type="button">Keep focus</button>
+          {showStatus ? <RunStatus regions={regions} /> : null}
+        </>
+      );
+    }
+
+    const { rerender } = render(<StatusHarness showStatus={false} />);
+    const control = screen.getByRole("button", { name: "Keep focus" });
+    control.focus();
+
+    rerender(<StatusHarness showStatus />);
+
+    expect(document.activeElement).toBe(control);
   });
 });

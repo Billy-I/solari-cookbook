@@ -1,8 +1,9 @@
 import Image from "next/image";
-import { RotateCcw } from "lucide-react";
+import { CircleDashed, RotateCcw, TriangleAlert } from "lucide-react";
 
 import type { SupportedCountry } from "@/src/features/capture/contracts";
-import type { RegionRunState } from "@/src/features/run/use-sample-run";
+import type { RegionRunState } from "@/src/features/run/use-comparison-run";
+import { ReplayLink } from "@/src/components/replay-link";
 
 const countryNames: Record<SupportedCountry, string> = {
   us: "United States",
@@ -43,6 +44,22 @@ function displayValue(value: string | null): string {
   return value ?? "Not detected";
 }
 
+function stageLabel(stage: RegionRunState["stage"]): string {
+  return stage === "queued"
+    ? "Queued"
+    : stage === "launching"
+      ? "Launching browser"
+      : stage === "navigating"
+        ? "Loading page"
+        : stage === "extracting"
+          ? "Extracting evidence"
+          : "Closing session";
+}
+
+function isSampleCapture(sessionId: string): boolean {
+  return sessionId.startsWith("synthetic-local-fixture-");
+}
+
 type RegionResultProps = {
   region: RegionRunState;
   onRetry: (country: SupportedCountry) => void;
@@ -51,7 +68,25 @@ type RegionResultProps = {
 export function RegionResult({ region, onRetry }: RegionResultProps) {
   const countryName = countryNames[region.country];
 
-  if (region.response && !region.response.ok) {
+  if (!region.response) {
+    return (
+      <article
+        aria-label={`${countryName} regional evidence in progress`}
+        className="region-preview region-pending"
+      >
+        <header>
+          <strong>{region.country.toUpperCase()}</strong>
+          <span>{countryName}</span>
+        </header>
+        <p className="region-state">
+          <CircleDashed aria-hidden="true" size={16} />
+          {stageLabel(region.stage)}
+        </p>
+      </article>
+    );
+  }
+
+  if (!region.response.ok) {
     return (
       <article
         aria-label={`${countryName} regional evidence failed`}
@@ -61,6 +96,10 @@ export function RegionResult({ region, onRetry }: RegionResultProps) {
           <strong>{region.country.toUpperCase()}</strong>
           <span>{countryName}</span>
         </header>
+        <p className="region-state">
+          <TriangleAlert aria-hidden="true" size={16} />
+          Capture failed
+        </p>
         <p className="error-code">{region.response.error.code}</p>
         <p>{region.response.error.message}</p>
         {region.response.error.retryable ? (
@@ -77,14 +116,13 @@ export function RegionResult({ region, onRetry }: RegionResultProps) {
     );
   }
 
-  if (!region.response?.ok) {
-    return null;
-  }
-
   const { evidence } = region.response;
   const capturedAt = formatTimestamp(evidence.capturedAt);
   const host = new URL(evidence.requestedUrl).host;
-  const image = sampleImages[region.country];
+  const sampleImage = isSampleCapture(region.response.receipt.sessionId)
+    ? sampleImages[region.country]
+    : undefined;
+  const liveImage = `data:image/jpeg;base64,${region.response.screenshot.base64}`;
 
   return (
     <article
@@ -95,16 +133,24 @@ export function RegionResult({ region, onRetry }: RegionResultProps) {
         <strong>{region.country.toUpperCase()}</strong>
         <span>{countryName}</span>
       </header>
-      {image ? (
+      {sampleImage ? (
         <Image
           alt={`${countryName} evidence for ${host}, captured ${capturedAt}`}
           height={900}
           priority
           sizes="(max-width: 680px) 100vw, (max-width: 1000px) 50vw, 33vw"
-          src={image}
+          src={sampleImage}
           width={1280}
         />
-      ) : null}
+      ) : (
+        <Image
+          alt={`${countryName} evidence for ${host}, captured ${capturedAt}`}
+          height={900}
+          src={liveImage}
+          unoptimized
+          width={region.response.screenshot.width}
+        />
+      )}
       <dl className="evidence-list">
         <div>
           <dt>Final URL</dt>
@@ -132,6 +178,9 @@ export function RegionResult({ region, onRetry }: RegionResultProps) {
         </div>
       </dl>
       <p className="capture-time">Captured {capturedAt}</p>
+      {!isSampleCapture(region.response.receipt.sessionId) ? (
+        <ReplayLink sessionId={region.response.receipt.sessionId} />
+      ) : null}
     </article>
   );
 }

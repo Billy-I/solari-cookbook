@@ -442,6 +442,25 @@ select {
   min-height: 320px;
 }
 
+.region-pending {
+  min-height: 320px;
+}
+
+.region-state,
+.replay-state,
+.replay-link,
+.comparison-state {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.region-state {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 18px 0 0;
+}
+
 .secondary-action,
 .future-actions button {
   align-items: center;
@@ -453,6 +472,7 @@ select {
   font-weight: 700;
   gap: 8px;
   justify-content: center;
+  min-height: 44px;
   padding: 0 14px;
 }
 
@@ -506,8 +526,29 @@ select {
   white-space: nowrap;
 }
 
-.state-different {
+.state-different,
+.state-missing {
   color: #9b311f;
+}
+
+.difference-compact {
+  display: none;
+}
+
+.replay-link,
+.replay-state {
+  font-size: 0.8125rem;
+  margin-top: 14px;
+  min-height: 44px;
+}
+
+.replay-link {
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  color: var(--text);
+  font-weight: 700;
+  padding: 0 14px;
+  text-decoration: none;
 }
 
 .evidence-actions {
@@ -701,6 +742,43 @@ select {
 
   .future-actions p {
     text-align: left;
+  }
+
+  .difference-wide {
+    display: none;
+  }
+
+  .difference-compact {
+    display: grid;
+    gap: 12px;
+    margin: 0 12px;
+  }
+
+  .difference-definition {
+    border: 1px solid var(--rule);
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .difference-definition > dt {
+    font-weight: 750;
+  }
+
+  .difference-definition > div {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(110px, 0.45fr) minmax(0, 1fr);
+  }
+
+  .difference-definition dt,
+  .difference-definition dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .difference-definition > div dt {
+    color: var(--muted);
   }
 }
 

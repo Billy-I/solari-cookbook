@@ -1,5 +1,5 @@
 import type { CaptureStage, SupportedCountry } from "@/src/features/capture/contracts";
-import type { RegionRunState } from "@/src/features/run/use-sample-run";
+import type { RegionRunState } from "@/src/features/run/use-comparison-run";
 
 const countryNames: Record<SupportedCountry, string> = {
   us: "United States",

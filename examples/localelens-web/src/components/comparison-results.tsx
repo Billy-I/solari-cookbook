@@ -1,9 +1,7 @@
 import type { SupportedCountry } from "@/src/features/capture/contracts";
-import type { RegionRunState } from "@/src/features/run/use-sample-run";
-import {
-  compareRegions,
-  DifferenceTable,
-} from "@/src/components/difference-table";
+import type { RegionRunState } from "@/src/features/run/use-comparison-run";
+import { DifferenceTable } from "@/src/components/difference-table";
+import { compareEvidence } from "@/src/features/compare/compare-evidence";
 import { RegionResult } from "@/src/components/region-result";
 
 type ComparisonResultsProps = {
@@ -12,11 +10,14 @@ type ComparisonResultsProps = {
 };
 
 export function ComparisonResults({ regions, onRetry }: ComparisonResultsProps) {
-  const visibleRegions = regions.filter(({ response }) => response !== null);
-
-  if (visibleRegions.length === 0) {
+  if (regions.length === 0) {
     return null;
   }
+
+  const settledRegions = regions.filter(
+    (region): region is RegionRunState & { response: NonNullable<RegionRunState["response"]> } =>
+      region.response !== null,
+  );
 
   return (
     <section aria-label="Regional results" className="results-section">
@@ -28,7 +29,7 @@ export function ComparisonResults({ regions, onRetry }: ComparisonResultsProps) 
         <p>Evidence appears as each sample capture settles.</p>
       </div>
       <div className="region-grid">
-        {visibleRegions.map((region) => (
+        {regions.map((region) => (
           <RegionResult key={region.country} onRetry={onRetry} region={region} />
         ))}
       </div>
@@ -41,8 +42,8 @@ export function ComparisonResults({ regions, onRetry }: ComparisonResultsProps) 
           <p>Text is compared after whitespace normalization only.</p>
         </div>
         <DifferenceTable
-          countries={visibleRegions.map(({ country }) => country)}
-          fields={compareRegions(visibleRegions)}
+          countries={regions.map(({ country }) => country)}
+          fields={compareEvidence(settledRegions)}
         />
       </section>
     </section>

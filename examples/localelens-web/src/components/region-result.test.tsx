@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { RegionResult } from "@/src/components/region-result";
-import type { RegionRunState } from "@/src/features/run/use-sample-run";
+import type { RegionRunState } from "@/src/features/run/use-comparison-run";
 import { sampleCaptureByCountry } from "@/src/test/fixtures";
 
 describe("RegionResult", () => {
@@ -20,6 +20,35 @@ describe("RegionResult", () => {
         name: /United States.*regional\.example\.test.*1 Sep 2026, 12:00:00 UTC/i,
       }),
     ).toBeVisible();
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("%2Fsample%2Fus.jpg"),
+    );
+  });
+
+  it("uses bounded live screenshot bytes rather than a featured sample", () => {
+    const region: RegionRunState = {
+      country: "us",
+      stage: "complete",
+      response: {
+        ...sampleCaptureByCountry.us,
+        receipt: {
+          ...sampleCaptureByCountry.us.receipt,
+          sessionId: "live-capture-session",
+        },
+        screenshot: {
+          ...sampleCaptureByCountry.us.screenshot,
+          base64: "bGl2ZS1qcGVn",
+        },
+      },
+    };
+
+    render(<RegionResult onRetry={vi.fn()} region={region} />);
+
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "data:image/jpeg;base64,bGl2ZS1qcGVn",
+    );
   });
 
   it("renders null consent as not detected", () => {
@@ -62,5 +91,18 @@ describe("RegionResult", () => {
     expect(screen.getByText("Sample capture was unavailable.")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Retry Germany" }));
     expect(onRetry).toHaveBeenCalledWith("de");
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a running card distinct from sample evidence", () => {
+    render(
+      <RegionResult
+        onRetry={vi.fn()}
+        region={{ country: "de", stage: "navigating", response: null }}
+      />,
+    );
+
+    expect(screen.getByText("Loading page")).toBeVisible();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 });
