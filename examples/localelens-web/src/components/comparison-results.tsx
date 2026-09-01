@@ -48,7 +48,10 @@ export function ComparisonResults({ mode, regions, onRetry }: ComparisonResultsP
             <p className="eyebrow">Aligned evidence</p>
             <h2 id="differences-heading">Observed differences</h2>
           </div>
-          <p>Text is compared after whitespace normalization only.</p>
+          <p>
+            All fields use whitespace normalization. Language and currency
+            comparisons also use locale-invariant lowercasing.
+          </p>
         </div>
         <DifferenceTable
           countries={regions.map(({ country }) => country)}

@@ -34,6 +34,38 @@ afterEach(() => {
 });
 
 describe("runComparison", () => {
+  it("fails closed when both receipt countries differ from the requested fan-out country", async () => {
+    const mismatchedResponse: CaptureResponse = {
+      ...sampleCaptureByCountry.gb,
+      receipt: {
+        ...sampleCaptureByCountry.gb.receipt,
+        country: "gb",
+        proxyCountry: "gb",
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(response(mismatchedResponse)),
+    );
+    const runEvents = events();
+
+    await runCountryCapture(
+      "us",
+      "https://regional.example.test/pricing",
+      runEvents,
+      new AbortController().signal,
+    );
+
+    expect(runEvents.succeeded).not.toHaveBeenCalled();
+    expect(runEvents.failed).toHaveBeenCalledWith(
+      "us",
+      expect.objectContaining({
+        code: "SOLARI_PROXY_MISMATCH",
+        retryable: false,
+      }),
+    );
+  });
+
   it("runs exactly one normalized country request for an explicit retry", async () => {
     const fetch = vi.fn().mockResolvedValue(response(sampleCaptureByCountry.gb));
     vi.stubGlobal("fetch", fetch);

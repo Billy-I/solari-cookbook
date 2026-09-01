@@ -9,6 +9,7 @@ import {
 import { toSafeCaptureFailure } from "@/src/features/capture/safe-error";
 
 const clientTimeoutMs = 45_000;
+const maximumUnresolvedTransports = 3;
 
 export type PublicCaptureError = CaptureFailure["error"];
 
@@ -18,8 +19,77 @@ export type RunEvents = {
   failed(country: SupportedCountry, error: PublicCaptureError): void;
 };
 
-function safeError(code: "NAVIGATION_TIMEOUT" | "CAPTURE_FAILED"): PublicCaptureError {
+function safeError(
+  code:
+    | "NAVIGATION_TIMEOUT"
+    | "SOLARI_CAPACITY"
+    | "SOLARI_PROXY_MISMATCH"
+    | "CAPTURE_FAILED",
+): PublicCaptureError {
   return toSafeCaptureFailure(new Error(code)).error;
+}
+
+type ActiveTransport = {
+  country: SupportedCountry;
+  settled: Promise<void>;
+  signal: AbortSignal;
+};
+
+export type CaptureTransportPool = {
+  hasCountry(country: SupportedCountry): boolean;
+  hasSignal(signal: AbortSignal): boolean;
+  run<T>(
+    country: SupportedCountry,
+    signal: AbortSignal,
+    start: () => Promise<T>,
+  ): Promise<T>;
+  whenSignalSettled(signal: AbortSignal): Promise<void>;
+};
+
+export function createCaptureTransportPool(): CaptureTransportPool {
+  const active = new Set<ActiveTransport>();
+
+  return {
+    hasCountry(country) {
+      return [...active].some((transport) => transport.country === country);
+    },
+    hasSignal(signal) {
+      return [...active].some((transport) => transport.signal === signal);
+    },
+    run<T>(country: SupportedCountry, signal: AbortSignal, start: () => Promise<T>) {
+      if (active.size >= maximumUnresolvedTransports) {
+        return Promise.reject(new Error("SOLARI_CAPACITY"));
+      }
+
+      let request: Promise<T>;
+      try {
+        request = start();
+      } catch (error) {
+        request = Promise.reject(error);
+      }
+
+      const transport = {} as ActiveTransport;
+      transport.country = country;
+      transport.signal = signal;
+      transport.settled = request.then(
+        () => {
+          active.delete(transport);
+        },
+        () => {
+          active.delete(transport);
+        },
+      );
+      active.add(transport);
+      return request;
+    },
+    async whenSignalSettled(signal) {
+      await Promise.all(
+        [...active]
+          .filter((transport) => transport.signal === signal)
+          .map((transport) => transport.settled),
+      );
+    },
+  };
 }
 
 function abortReason(signal: AbortSignal): unknown {
@@ -56,6 +126,7 @@ async function runCountryRequest(
   url: string,
   events: RunEvents,
   signal: AbortSignal,
+  transportPool: CaptureTransportPool,
 ): Promise<void> {
   events.started(country);
 
@@ -65,7 +136,7 @@ async function runCountryRequest(
 
   try {
     const { response, body } = await settleRequest(
-      (async () => {
+      transportPool.run(country, signal, async () => {
         const response = await fetch("/api/captures", {
           body: JSON.stringify({ country, url }),
           headers: { "Content-Type": "application/json" },
@@ -73,14 +144,30 @@ async function runCountryRequest(
           signal,
         });
         return { response, body: await response.json() };
-      })(),
+      }),
       signal,
     );
     const parsed = captureResponseSchema.safeParse(body);
 
     if (signal.aborted) throw abortReason(signal);
-    if (parsed.success && response.ok && parsed.data.ok) {
+    if (
+      parsed.success &&
+      response.ok &&
+      parsed.data.ok &&
+      parsed.data.receipt.country === country &&
+      parsed.data.receipt.proxyCountry === country
+    ) {
       outcome = { type: "succeeded", response: parsed.data };
+    } else if (
+      parsed.success &&
+      parsed.data.ok &&
+      (parsed.data.receipt.country !== country ||
+        parsed.data.receipt.proxyCountry !== country)
+    ) {
+      outcome = {
+        type: "failed",
+        error: safeError("SOLARI_PROXY_MISMATCH"),
+      };
     } else {
       outcome = {
         type: "failed",
@@ -95,8 +182,10 @@ async function runCountryRequest(
     outcome = {
       type: "failed",
       error:
-        error instanceof Error && error.message === "NAVIGATION_TIMEOUT"
-          ? safeError("NAVIGATION_TIMEOUT")
+        error instanceof Error &&
+        (error.message === "NAVIGATION_TIMEOUT" ||
+          error.message === "SOLARI_CAPACITY")
+          ? safeError(error.message)
           : safeError("CAPTURE_FAILED"),
     };
   }
@@ -110,12 +199,14 @@ export async function runCountryCapture(
   url: string,
   events: RunEvents,
   signal: AbortSignal,
+  transportPool = createCaptureTransportPool(),
 ): Promise<void> {
   await runCountryRequest(
     country,
     new URL(url.trim()).toString(),
     events,
     signal,
+    transportPool,
   );
 }
 
@@ -143,12 +234,15 @@ export async function runComparison(
   input: AuditFormValue,
   events: RunEvents,
   signal: AbortSignal,
+  transportPool = createCaptureTransportPool(),
 ): Promise<void> {
   const countries = validateSelectedCountries(input);
   const url = new URL(input.url.trim()).toString();
 
   const settlements = await Promise.allSettled(
-    countries.map((country) => runCountryRequest(country, url, events, signal)),
+    countries.map((country) =>
+      runCountryRequest(country, url, events, signal, transportPool),
+    ),
   );
 
   if (signal.aborted) throw abortReason(signal);

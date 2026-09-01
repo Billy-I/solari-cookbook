@@ -10,6 +10,7 @@ import type {
   SupportedCountry,
 } from "@/src/features/capture/contracts";
 import {
+  createCaptureTransportPool,
   runComparison,
   runCountryCapture,
   type RunEvents,
@@ -243,13 +244,31 @@ export function useComparisonRun(
   const retryReservationsRef = useRef(
     new Map<SupportedCountry, number>(),
   );
+  const transportPoolRef = useRef(createCaptureTransportPool());
 
   const abortActive = useCallback(() => {
     for (const controller of controllersRef.current.values()) {
       controller.abort();
     }
-    controllersRef.current.clear();
   }, []);
+
+  const releaseController = useCallback(
+    (operationId: number, controller: AbortController) => {
+      const pool = transportPoolRef.current;
+      const remove = () => {
+        if (controllersRef.current.get(operationId) === controller) {
+          controllersRef.current.delete(operationId);
+        }
+      };
+
+      if (mode === "live" && pool.hasSignal(controller.signal)) {
+        void pool.whenSignalSettled(controller.signal).then(remove);
+      } else {
+        remove();
+      }
+    },
+    [mode],
+  );
 
   useEffect(
     () => () => {
@@ -358,15 +377,23 @@ export function useComparisonRun(
             validatedValue,
             eventsFor(operationId),
             controller.signal,
+            transportPoolRef.current,
           );
         }
       } catch (error) {
         if (!controller.signal.aborted) throw error;
       } finally {
-        controllersRef.current.delete(operationId);
+        releaseController(operationId, controller);
       }
     },
-    [abortActive, comparisonRunner, eventsFor, mode, runSampleCountry],
+    [
+      abortActive,
+      comparisonRunner,
+      eventsFor,
+      mode,
+      releaseController,
+      runSampleCountry,
+    ],
   );
 
   const retry = useCallback(
@@ -379,6 +406,7 @@ export function useComparisonRun(
         generationRef.current !== state.generation ||
         currentOperationIdsRef.current.get(country) !== expectedOperationId ||
         retryReservationsRef.current.has(country) ||
+        (mode === "live" && transportPoolRef.current.hasCountry(country)) ||
         region?.stage !== "failed" ||
         !region.response ||
         region.response.ok ||
@@ -409,12 +437,13 @@ export function useComparisonRun(
             state.value.url,
             eventsFor(operationId),
             controller.signal,
+            transportPoolRef.current,
           );
         }
       } catch (error) {
         if (!controller.signal.aborted) throw error;
       } finally {
-        controllersRef.current.delete(operationId);
+        releaseController(operationId, controller);
         if (retryReservationsRef.current.get(country) === operationId) {
           retryReservationsRef.current.delete(country);
         }
@@ -424,6 +453,7 @@ export function useComparisonRun(
       countryRunner,
       eventsFor,
       mode,
+      releaseController,
       runSampleCountry,
       state.generation,
       state.operationIds,

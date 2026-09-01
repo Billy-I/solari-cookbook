@@ -88,6 +88,13 @@ async function settle(promise: Promise<void>, resolve: () => void) {
   await act(async () => promise);
 }
 
+function response(body: CaptureResponse): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json" },
+    status: 200,
+  });
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -468,6 +475,93 @@ describe("useComparisonRun", () => {
     ]);
     expect(comparison.calls).toHaveLength(0);
     expect(country.calls).toHaveLength(0);
+  });
+
+  it("retains timed-out transport ownership and permits retry only after that transport settles", async () => {
+    vi.useFakeTimers();
+    const transports: Array<{ resolve(response: Response): void }> = [];
+    const fetch = vi.fn(
+      (input: RequestInfo | URL, init?: RequestInit) => {
+        void input;
+        void init;
+        return new Promise<Response>((resolve) => {
+          transports.push({ resolve });
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetch);
+    const { result, unmount } = renderHook(() =>
+      useComparisonRun({ mode: "live" }),
+    );
+
+    let run!: Promise<void>;
+    act(() => {
+      run = result.current.start(value);
+    });
+    const initialSignal = (fetch.mock.calls[0]![1] as RequestInit)
+      .signal as AbortSignal;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45_000);
+      await run;
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(result.current.regions.every(({ stage }) => stage === "failed")).toBe(
+      true,
+    );
+
+    act(() => {
+      void result.current.retry("us");
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      transports[0]!.resolve(response(sampleCaptureByCountry.us));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    let retry!: Promise<void>;
+    act(() => {
+      retry = result.current.retry("us");
+    });
+    expect(fetch).toHaveBeenCalledTimes(4);
+    transports[3]!.resolve(response(sampleCaptureByCountry.us));
+    await act(async () => retry);
+
+    unmount();
+    expect(initialSignal.aborted).toBe(true);
+  });
+
+  it("fails closed at three unresolved transports when a timed-out run is replaced", async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn(() => new Promise<Response>(() => undefined));
+    vi.stubGlobal("fetch", fetch);
+    const { result } = renderHook(() => useComparisonRun({ mode: "live" }));
+
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.start(value);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45_000);
+      await first;
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
+
+    let replacement!: Promise<void>;
+    act(() => {
+      replacement = result.current.start({
+        url: "https://second.example.test/",
+        countries: ["fr", "jp", "au"],
+      });
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(3);
+    await act(async () => replacement);
+    expect(result.current.regions.every(({ stage }) => stage === "failed")).toBe(
+      true,
+    );
   });
 
   it.each([

@@ -6,6 +6,33 @@ import type { RegionRunState } from "@/src/features/run/use-comparison-run";
 import { sampleCaptureByCountry } from "@/src/test/fixtures";
 
 describe("ComparisonResults", () => {
+  it("describes the exact deterministic comparison normalization rules", () => {
+    render(
+      <ComparisonResults
+        mode="sample"
+        onRetry={() => undefined}
+        regions={[
+          {
+            country: "us",
+            stage: "complete",
+            response: sampleCaptureByCountry.us,
+          },
+          {
+            country: "gb",
+            stage: "complete",
+            response: sampleCaptureByCountry.gb,
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "All fields use whitespace normalization. Language and currency comparisons also use locale-invariant lowercasing.",
+      ),
+    ).toBeVisible();
+  });
+
   it("preserves settled evidence when Germany fails and retries only Germany", () => {
     const onRetry = vi.fn();
     const regions: RegionRunState[] = [
