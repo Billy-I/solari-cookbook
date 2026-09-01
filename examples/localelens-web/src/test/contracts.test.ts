@@ -203,21 +203,18 @@ describe("reportSchema", () => {
       mode: "sample",
       requestedUrl: "https://example.com",
       countries: ["us", "gb"],
-      captures: [
+      results: [
         {
-          ...validCapture,
+          country: "us",
           evidence: {
             ...validEvidence,
             finalUrl: "https://example.com/us",
           },
-          receipt: {
-            ...validReceipt,
-            country: "us",
-            proxyCountry: "us",
-            timezoneId: "America/New_York",
-          },
         },
-        validCapture,
+        {
+          country: "gb",
+          evidence: validEvidence,
+        },
       ],
       generatedAt: "2026-09-01T12:01:00.000Z",
     };
@@ -233,7 +230,27 @@ describe("reportSchema", () => {
         mode: "sample",
         requestedUrl: "https://example.com",
         countries: ["us", "gb", "de", "fr"],
-        captures: [validCapture],
+        results: [{ country: "gb", evidence: validEvidence }],
+        generatedAt: "2026-09-01T12:01:00.000Z",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects session-control fields from report results", () => {
+    expect(() =>
+      reportSchema.parse({
+        schemaVersion: 1,
+        status: "complete",
+        mode: "sample",
+        requestedUrl: "https://example.com",
+        countries: ["us", "gb"],
+        results: [
+          {
+            country: "gb",
+            evidence: validEvidence,
+            sessionId: "synthetic-session-control",
+          },
+        ],
         generatedAt: "2026-09-01T12:01:00.000Z",
       }),
     ).toThrow();

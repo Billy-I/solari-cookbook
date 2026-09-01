@@ -120,6 +120,13 @@ export const CAPTURE_STAGES = [
   "failed",
 ] as const;
 
+const reportResultSchema = z
+  .object({
+    country: supportedCountrySchema,
+    evidence: pageEvidenceSchema,
+  })
+  .strict();
+
 export const reportSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -127,7 +134,7 @@ export const reportSchema = z
     mode: z.enum(["sample", "live"]),
     requestedUrl: httpsUrlSchema,
     countries: z.array(supportedCountrySchema).min(2).max(3),
-    captures: z.array(captureSuccessSchema).min(1).max(3),
+    results: z.array(reportResultSchema).min(1).max(3),
     generatedAt: z.iso.datetime({ offset: true }),
   })
   .strict();
@@ -142,4 +149,5 @@ export type SafeCaptureErrorCode =
 export type CaptureFailure = z.infer<typeof captureFailureSchema>;
 export type CaptureResponse = z.infer<typeof captureResponseSchema>;
 export type CaptureStage = (typeof CAPTURE_STAGES)[number];
+export type ReportResult = z.infer<typeof reportResultSchema>;
 export type Report = z.infer<typeof reportSchema>;
