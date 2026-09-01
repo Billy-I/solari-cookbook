@@ -20,7 +20,7 @@ function successfulRegion(
       ...additions,
       evidence: {
         ...sampleCaptureByCountry[country].evidence,
-        finalUrl: `https://regional.example.test/${country}/pricing?token=temporary#offer`,
+        finalUrl: `https://user:password@regional.example.test/${country}/pricing?token=temporary#offer`,
       },
     },
     stage: "complete",
@@ -119,6 +119,7 @@ describe("createJsonReport", () => {
     expect(output.json).not.toContain("synthetic-local-fixture");
     expect(output.json).not.toContain("c3ludGhldGlj");
     expect(output.json).not.toContain("SECRET");
+    expect(output.json).not.toContain("password");
     expect(output.json).not.toContain("replay.example.test");
     expect(output.json).not.toContain("?token=");
     expect(output.json).not.toContain("#offer");
