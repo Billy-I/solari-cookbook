@@ -3,20 +3,26 @@ import { describe, expect, it } from "vitest";
 
 import Page from "@/app/page";
 
-describe("LocaleLens foundation page", () => {
-  it("states the Phase 0 boundary without product controls", () => {
+describe("LocaleLens sample page", () => {
+  it("presents the complete comparison-page structure", () => {
     render(<Page />);
 
     expect(
-      screen.getByRole("heading", { name: "LocaleLens" }),
+      screen.getByRole("heading", {
+        name: "Compare the experience by market",
+      }),
     ).toBeVisible();
     expect(
-      screen.getByText(
-        "Foundation ready. Visual experience begins in Phase 1.",
-      ),
+      screen.getByRole("region", { name: "Run comparison" }),
     ).toBeVisible();
     expect(
-      screen.queryByRole("button", { name: /compare/i }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("region", { name: "Run evidence" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Regional results" }),
+    ).toBeVisible();
+    expect(
+      screen.getAllByRole("article", { name: /regional evidence/i }),
+    ).toHaveLength(3);
   });
 });
