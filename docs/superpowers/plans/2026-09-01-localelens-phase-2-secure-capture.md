@@ -40,6 +40,10 @@ Complete this gate before installing the SDK or editing application source:
    `Solari`, `BrowserSession.proxy`, cleanup, and replay APIs remain current.
    The SDK reference also documents a two-attempt HTTP default, so this plan
    now requires `maxAttempts: 1` explicitly.
+   The Browser API reference documents signed composite session IDs containing
+   `:`, `.`, `_`, and `-`, and an intentionally ambiguous replay `404` that can
+   mean finalization is pending, recording was absent, or the session is not
+   owned. Replay validation and states below reflect that live contract.
 5. Billy creates or supplies a Solari `slr_live_` key from the console through an approved local secret path. The executor may verify only redacted presence/absence and must never print, paste, log, commit, or place the value in a `NEXT_PUBLIC_` variable.
 6. Confirm the live-call budget remains at most three. No provider call occurs before mocked tests, typecheck, lint, build, secret scan, and live-mode guards pass.
 
@@ -278,7 +282,11 @@ git commit -m "feat: capture one recorded regional session"
 
 - [ ] **Step 1: Write failing route tests**
 
-Cover invalid JSON, oversized body, unsupported country, `LIVE_CAPTURE_ENABLED !== "true"`, missing key, success, safe error mapping, replay ID syntax, pending replay, ready replay, missing replay, and provider failure. Require `Cache-Control: no-store` on every response.
+Cover invalid JSON, oversized body, unsupported country,
+`LIVE_CAPTURE_ENABLED !== "true"`, missing key, success, safe error mapping,
+replay ID syntax, the provider's ambiguous `404` pending/unavailable state,
+ready replay, and provider failure. Require `Cache-Control: no-store` on every
+response. Do not claim that a replay is definitively missing from a `404`.
 
 - [ ] **Step 2: Confirm RED**
 
@@ -288,7 +296,15 @@ npm test -- app/api/captures/route.test.ts 'app/api/replays/[id]/route.test.ts'
 
 - [ ] **Step 3: Implement the smallest route adapters**
 
-Parse with Zod, cap the JSON body at 2 KB, call the domain service, and return stable status codes. The replay route accepts IDs matching `^[A-Za-z0-9_-]{6,128}$` and returns only an HTTPS replay URL supplied by Solari. Create the replay client per request and always call `solari.close()` in `finally`; replay readiness may remain pending while Solari completes its asynchronous upload. Do not persist requests or responses.
+Parse with Zod, cap the JSON body at 2 KB, call the domain service, and return
+stable status codes. The replay route accepts IDs matching
+`^[A-Za-z0-9_.:-]{6,500}$`, which admits the documented signed composite format
+without admitting slashes, query strings, whitespace, or percent escapes. It
+returns only an HTTPS replay URL supplied by Solari. Create the replay client
+per request and always call `solari.close()` in `finally`; a provider `404`
+remains pending/unavailable because the API intentionally does not distinguish
+finalization from an absent or unowned recording. Do not persist requests or
+responses, poll automatically, or claim a definitive missing state.
 
 - [ ] **Step 4: Verify and commit**
 
