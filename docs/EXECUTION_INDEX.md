@@ -1,6 +1,6 @@
 # LocaleLens Execution Index
 
-Status: Phase 1 complete locally; Phase 2 not started
+Status: Phase 2 complete; Phase 3 not started
 
 Owner: Billy Tompazis
 
@@ -17,7 +17,7 @@ LocaleLens is a responsive web application that captures one public HTTPS page t
 ## Privacy boundary
 
 - Keep the concept, screenshots, source, and demo private until Phase 5 and explicit owner authorization.
-- This checkout is a clone of the official cookbook repository, with `upstream` set to `https://github.com/solari-sdk/solari-cookbook.git`; it is not yet connected to Billy's required writable fork.
+- This checkout retains the official cookbook as `upstream` and Billy's writable fork as `origin`. Phase branches may be pushed only to `origin`; never push to `upstream`.
 - A neutral credit request may acknowledge participation without describing the application.
 - Never place a Solari API key in Git, client code, build output, screenshots, logs, evidence documents, or a public host.
 
@@ -77,7 +77,7 @@ Complete this table only with verified Git evidence during execution.
 |---|---|---|---|---:|---|
 | 0 | `d304843f5ea0edb5c27829bb2ca30868645bef7a` | `53b73806c6205d8181bf19b7fc0f8cd81e7ad18c` | PASS: 19 tests, typecheck, lint, build, dependency inspection | 0 | Yes |
 | 1 | `53b73806c6205d8181bf19b7fc0f8cd81e7ad18c` | `6ae07c11d58f2fce27e3cdca84b75578968a04cc` | PASS: 33 tests, typecheck, lint, build, Browser at 360/768/1440 | 0 | Yes |
-| 2 | Not started | Not started | Not run | 0 | No |
+| 2 | `5691271ce2027ff8e1a61b04a3991ab7e72e088a` | Final Phase 2 branch head (reported after evidence commit) | PASS: 147 tests, typecheck, lint, build, secret inspection, runtime guards, one recorded US capture using Solari's documented residential default with a matching provider-country receipt, and one honest pending replay lookup | 1 capture + 1 replay lookup | No |
 | 3 | Not started | Not started | Not run | 0 | No |
 | 4 | Not started | Not started | Not run | 0 | No |
 | 5 | Not started | Not started | Not run | 0 | No |
@@ -112,8 +112,8 @@ Runtime dependencies are limited to Next.js, React, React DOM, Tailwind CSS, Luc
 
 ## Current next gate
 
-1. Billy creates a public GitHub fork of `solari-sdk/solari-cookbook` and provides its exact URL. Creating the fork is an owner action, not implied by permission to commit or push code.
-2. Configure that fork as `origin`, retain the official repository as `upstream`, push the completed Phase 1 branch, and verify remote SHA parity.
-3. Create `codex/localelens-phase-2-secure-capture` from the exact reviewed planning checkpoint named in [`PHASE_2_START_PROMPT.md`](PHASE_2_START_PROMPT.md).
-4. Before Phase 2 implementation, Billy signs in to the [Solari console](https://console.getsolari.com), creates or supplies a live API key through an approved local secret path, and confirms the live-call budget. The key must never be pasted into chat, Git, client code, logs, screenshots, or evidence.
-5. Execute Phase 2 only. The stable `https://example.com/` smoke target proves the real Solari session, proxy receipt, capture, cleanup, and replay path; it is not evidence of locale-specific content differences. Phase 3 remains responsible for a real multi-country comparison. Do not build or deploy a separate locale fixture site unless Billy separately scopes and authorizes that additional public surface.
+Phase 2 stops at the secure single-region capture boundary recorded in
+[`phase-2.md`](../examples/localelens-web/docs/evidence/phase-2.md). Phase 3 is
+not started and requires a separate owner-authorized task anchored to the exact
+published Phase 2 terminal SHA. Do not infer that authorization from Phase 2
+completion, the retained local Solari key, or the pending replay state.
