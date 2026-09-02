@@ -8,7 +8,7 @@
   --muted: #62635f;
   --rule: #c9c6be;
   --rule-strong: #373936;
-  --signal: #d84c36;
+  --signal: #cf462f;
   --signal-hover: #bd3e2c;
   color-scheme: light;
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -821,5 +821,13 @@ select {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (pointer: coarse) {
+  .how-it-works summary {
+    align-items: center;
+    display: inline-flex;
+    min-height: 44px;
   }
 }
