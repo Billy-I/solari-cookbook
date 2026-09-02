@@ -1,6 +1,6 @@
 # LocaleLens Execution Index
 
-Status: Phase 3 owner accepted; Phase 4 in progress
+Status: Phase 4 owner accepted; Phase 5 Tasks 1–3 in progress
 
 Owner: Billy Tompazis
 
@@ -79,8 +79,8 @@ Complete this table only with verified Git evidence during execution.
 | 1 | `53b73806c6205d8181bf19b7fc0f8cd81e7ad18c` | `6ae07c11d58f2fce27e3cdca84b75578968a04cc` | PASS: 33 tests, typecheck, lint, build, Browser at 360/768/1440 | 0 | Yes |
 | 2 | `5691271ce2027ff8e1a61b04a3991ab7e72e088a` | Final Phase 2 branch head (reported after evidence commit) | PASS: 147 tests, typecheck, lint, build, secret inspection, runtime guards, one recorded US capture using Solari's documented residential default with a matching provider-country receipt, and one honest pending replay lookup | 1 capture + 1 replay lookup | No |
 | 3 | `026b6ffe4d3faca5e8c02c29885846675e699cfd` | `06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` | PASS: 210 tests, typecheck, lint, build, bounded live comparison, replay checks, export safety | 4 capture + 3 replay | Yes |
-| 4 | `06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` | In progress | In progress | 0 | No |
-| 5 | Not started | Not started | Not run | 0 | No |
+| 4 | `06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` | `ec05f42bfadce32a406ffd1e883c03582aacfb90` | PASS: owner accepted qualified local evidence | 4 capture + 6 replay | Yes |
+| 5 | `ec05f42bfadce32a406ffd1e883c03582aacfb90` | In progress | Tasks 1–3 in progress; Task 4 and all external actions remain unauthorized | 0 | No |
 
 ## Evidence classes
 
@@ -112,9 +112,9 @@ Runtime dependencies are limited to Next.js, React, React DOM, Tailwind CSS, Luc
 
 ## Current next gate
 
-Phase 3 is complete and owner accepted at
-`06bfba6efd2c9ef4ef98cc0eb9266afd377082fa`, with evidence recorded in
-[`phase-3.md`](../examples/localelens-web/docs/evidence/phase-3.md). Phase 4 is
-authorized only by the owner task anchored to that exact SHA and is now in
-progress on `codex/localelens-phase-4-hardening`. This does not authorize Phase
-5, a push, deployment, public submission, or social posting.
+Phase 4 is owner accepted at
+`ec05f42bfadce32a406ffd1e883c03582aacfb90`, with qualified evidence recorded
+in [`phase-4.md`](../examples/localelens-web/docs/evidence/phase-4.md). Phase 5
+Tasks 1–3 are in progress on `codex/localelens-phase-5-submission`, created
+directly from that exact accepted predecessor. Task 4, push, deployment,
+publication, submission, posting, pull request, and merge remain unauthorized.

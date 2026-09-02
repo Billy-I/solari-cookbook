@@ -1,126 +1,86 @@
 # LocaleLens
 
-LocaleLens is a regional web-experience comparison tool for product designers,
-growth teams, localization leads, and QA engineers. It captures bounded,
-reviewable evidence from one public HTTPS page through Solari regional browser
-sessions instead of treating an assumed proxy location as proof.
+LocaleLens helps product designers, growth teams, localization leads, and QA
+engineers compare how one public HTTPS page renders across selected markets,
+using reviewable evidence rather than an assumed VPN location.
 
-## Phase 4 local status
+![LocaleLens sample comparison at desktop width](../../docs/design/evidence/phase-1-shell-1440x900.jpg)
 
-Phase 4 is locally complete with frozen evidence on exact predecessor
-`06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` and implementation head
-`818f32463b66faba049a57fa34e2e8b5d1219c3e`. The exact evidence-commit SHA is
-resolved and reported by Git after commit instead of being embedded
-self-referentially in the evidence. Owner acceptance remains pending.
+## Reviewer journey
 
-The final local gate passes 23 Vitest files / 234 tests, typecheck, lint, a
-sample-mode production build, the 151,504 B / 184,320 B main-route gzip budget,
-11/11 sample-only Playwright tests, the app-reachable API-method gate,
-realistic tracked/fresh-build secret scans, and the Git whitespace check. The
-sample runner observed zero capture/replay API requests and spent zero Solari
-credits.
+Start in deterministic sample mode: install dependencies, run the app, and
+compare the featured public-page fixture without a Solari key or provider call.
+The interface shows a run receipt, country progress, screenshots, normalized
+evidence differences, redacted JSON export, print output, and replay state.
 
-In-app Browser evidence covers the stable shell, featured success, invalid
-input, and running states at `360x800`, `768x1024`, and `1440x900`, plus the
-live partial/retry/replay/final states at `1440x900`. The bounded live run used
-exactly four Spotify Premium capture calls: three initial US/GB/DE calls and
-one explicit GB retry, with no automatic retry. Three initial replay lookups
-were pending; one manual re-check per country made all three ready. Replay URLs
-and session IDs are not recorded.
+Solari is essential only for local owner-controlled live mode. It launches one
+recorded regional browser per selected country through a residential proxy,
+checks the matching proxy-country receipt, captures bounded page evidence, and
+allows an explicit replay lookup. Tests, evidence, and the limits of each
+evidence class are linked below; sample checks do not prove provider, hosted,
+or assistive-technology behavior.
 
-Actual browser-chrome 200% zoom, Browser reduced motion, direct screen-reader
-or VoiceOver output, live-only state variants at the two smaller viewports,
-raw optional provider tier/receipt payloads, provider-console cleanup, and
-hosted/deployed behavior remain `NOT PROVEN`.
+## What is shipped
 
-## Phase 3 foundation
+- One public HTTPS target, compared across two or three supported countries.
+- Deterministic sample results with no capture or replay API request.
+- Independent country progress, partial results, and one explicit failed-country retry.
+- Bounded screenshots and normalized URL, language, title, heading, CTA,
+  currency, consent, status, and timestamp evidence.
+- Side-by-side screenshots, difference states, redacted JSON export, print,
+  and safe replay pending, ready, or unavailable presentation.
 
-Phase 3 retains the secure single-region capture and replay core from Phase 2
-and adds the bounded comparison journey:
+## Provenance and mode boundary
 
-- the exact official `@solarisdk/browser@0.1.2` package;
-- request-time, server-only `SOLARI_API_KEY` access;
-- `LIVE_CAPTURE_ENABLED=false` by default;
-- strict public HTTPS and DNS-address validation before launch, on top-level
-  navigation, and after navigation;
-- rejection of credentials, fragments, non-default ports, local hostnames,
-  and private, reserved, metadata, documentation, benchmark, multicast, and
-  broadcast IP ranges;
-- one recorded stealth residential-proxy session per capture request;
-- required matching proxy-country receipt;
-- incrementally bounded request ingestion, deterministic rendered-text
-  traversal budgets, a 45-second capture deadline, and a full-page JPEG capped
-  at 1.5 MB;
-- stable allowlisted client errors with no upstream body or credential data;
-- browser and Solari client cleanup in nested `finally` paths, with bounded
-  cleanup waits and redacted category/request-ID observability; and
-- guarded, non-cacheable capture and replay routes;
-- independent live capture for exactly two or three supported countries, with
-  at most three in flight;
-- honest partial results and one-country explicit retry without automatic
-  retry;
-- deterministic comparison rows with a valid compact mobile equivalent;
-- safe ready, pending, and unavailable replay presentation; and
-- hostname-only, privacy-bounded JSON export plus semantic print output.
+Sample mode is deterministic local fixture evidence. It is the normal local
+and public-safe mode and uses `NEXT_PUBLIC_APP_MODE=sample` with
+`LIVE_CAPTURE_ENABLED=false`. It spends zero Solari credits.
 
-The Phase 3 implementation and all non-live gates passed at pre-evidence SHA
-`dfe02a8abb563e71bcd34bf7b626232694f31c34`. A bounded live comparison of
-Spotify Premium spent exactly three initial calls for US, GB, and DE plus one
-explicit GB retry after a retryable failure. US and DE remained visible in an
-honest partial state; the GB retry completed the comparison. Direct provider
-country receipts matched all three requests. All three replay lookups remained
-pending, so no ready provider replay URL is claimed.
+Live mode is local and owner-controlled. It requires
+`LIVE_CAPTURE_ENABLED=true` and the server-only `SOLARI_API_KEY`; never place
+the key in client code, a `NEXT_PUBLIC_` variable, committed files, logs,
+screenshots, or documentation. A live run uses Solari Browser with stealth,
+residential proxy egress, recording, receipt validation, bounded extraction,
+and an explicit replay lookup. No automatic capture retry occurs.
 
 ## Architecture
 
-One `POST /api/captures` request still validates one URL and one supported
-country, creates one Solari client and one browser, captures the bounded
-result, and closes both resources. The client orchestrator independently
-schedules exactly two or three selected countries and merges completion in a
-stable country order. `GET /api/replays/:id` performs one explicit lookup for
-the bounded temporary replay URL and closes its client in `finally`.
+```mermaid
+flowchart LR
+  U[Reviewer browser] -->|sample mode| F[Deterministic fixtures]
+  U -->|owner-controlled live mode| R[POST one country]
+  R --> V[HTTPS and network validation]
+  V --> S[Solari recorded regional browser]
+  S --> E[Bounded screenshot and evidence]
+  E --> U
+  U --> D[Pure deterministic comparison]
+  D --> X[JSON and print export]
+  S -. session id .-> P[Replay lookup]
+```
 
-The Solari SDK is externalized from Next.js server bundling because its
-Node-specific browser transport must load natively. Both API routes use the
-Node runtime and `Cache-Control: no-store`.
-
-There is no database, account system, queue, background worker, automatic
-retry, analytics pipeline, or model provider. Sample mode remains deterministic
-and isolated from live mode. Live state is intentionally in browser memory;
-country retry, replay re-check, JSON download, and print are explicit user
-actions.
+Each live country request is separately validated, captured, and closed. The
+client merges results in stable country order; replay lookup is a separate,
+explicit action. There is no account system, database, queue, background
+worker, analytics pipeline, or model provider.
 
 ## Local setup
 
-From the cookbook repository root:
+From the cookbook root, use Node `v22.22.2`:
 
 ```bash
 cd examples/localelens-web
 nvm use
 node --version
 npm install
+npm run dev
 ```
 
-The repository's `.nvmrc` expects Node `v22.20.0`. Phase 3 verification uses
-the installed compatible Node `v22.22.2`. Application and dependency versions
-are pinned exactly in `package.json` and `package-lock.json`.
+Open the local URL printed by Next.js and use sample mode. For an authorized
+local live proof only, load the server-only `SOLARI_API_KEY` from a local secret
+path and set `LIVE_CAPTURE_ENABLED=true`. Keep live mode disabled for normal
+development and any public-safe sample deployment.
 
-Live mode requires a Solari key obtained from
-[`console.getsolari.com`](https://console.getsolari.com) and loaded through a
-local secret path. The qualified Phase 2 and Phase 3 proofs stored the key in
-the macOS Keychain service `LocaleLens Solari API Key` through
-Security.framework and injected it only into the server process:
-
-```text
-SOLARI_API_KEY=<local secret only>
-LIVE_CAPTURE_ENABLED=true
-```
-
-Never place the key in source, chat, shell output, screenshots, evidence, or a
-`NEXT_PUBLIC_` variable. Keep `LIVE_CAPTURE_ENABLED=false` for normal local and
-public operation. A capture request never retries automatically.
-
-## Verification
+## Verification and evidence
 
 Run non-live checks from `examples/localelens-web/`:
 
@@ -128,57 +88,37 @@ Run non-live checks from `examples/localelens-web/`:
 npm test
 npm run typecheck
 npm run lint
-npm run build
+NEXT_PUBLIC_APP_MODE=sample npm run build
 npm run check:budget
 npm run test:e2e
 npm run check:api-methods
 npm ls --depth=0
 ```
 
-Run repository checks from the cookbook root:
+The accepted Phase 4 local gate passed 23 Vitest files / 234 tests, sample
+build, budget, and 11/11 sample Playwright tests with zero capture/replay API
+requests. Its bounded live evidence used exactly four captures for Spotify
+Premium: US, GB, DE, and one explicit GB retry; six replay lookups were
+recorded separately. See the [execution index](../../docs/EXECUTION_INDEX.md),
+[Phase 4 evidence](docs/evidence/phase-4.md), [security review](docs/evidence/security-review.md),
+[visual review](docs/evidence/visual-review.md), and [approved design](../../docs/superpowers/specs/2026-09-01-localelens-design.md).
 
-```bash
-git diff --check
-git status --short --branch
-```
+## Security, privacy, and limitations
 
-The live proof is separate from normal verification so tests and builds cannot
-spend provider credit. Phase 3 used only
-`https://www.spotify.com/premium/`, with an exact four-call capture budget:
-three initial independent country calls and one explicit GB retry. The
-evidence records matching requested/direct provider-country receipts,
-locale-specific results, bounded screenshots, cleanup-path observations, the
-final comparison, and three pending replay lookups. It does not independently
-prove the raw optional provider tier field or a ready replay URL.
+Only server routes access `SOLARI_API_KEY` at request time. Targets must be
+public HTTPS addresses and pass hostname and DNS-address validation; credentials,
+fragments, non-default ports, local hosts, and private or reserved addresses are
+rejected. Screenshots, session IDs, replay URLs, raw page text, provider bodies,
+and environment values are excluded from logs and committed evidence.
 
-## Security and privacy
-
-- Only server routes import the Solari client factory; the key is read from
-  `process.env.SOLARI_API_KEY` at request time.
-- SDK HTTP requests use `maxAttempts: 1`, and `launch()` uses `retries: 0`.
-- Target page text is untrusted data and never consumed by a model or rendered
-  as HTML.
-- Screenshots, session IDs, replay URLs, raw page text, provider response
-  bodies, and environment values are excluded from logs and committed
-  evidence.
-- Replay `404` is reported as pending/unavailable because Solari intentionally
-  does not distinguish finalization delay from an absent or unowned replay.
-- No request or response is persisted server-side.
+This is qualified local evidence, not a production claim. Hosted or deployed
+behavior, direct screen-reader or VoiceOver output, actual browser-chrome 200%
+zoom, Browser reduced motion, live-only mobile and tablet transient states, raw
+provider receipts or tier data, provider-console cleanup, and the application
+method contract for `TRACE` remain `NOT PROVEN` as detailed in Phase 4 evidence.
 
 ## Phase boundary
 
-Phase 3 is complete. Phase 4 is locally complete with qualified evidence
-frozen; owner acceptance is still pending. Phase 5, push, pull request,
-deployment, release, and publication have not started and are not authorized
-here.
-
-See the [execution index](../../docs/EXECUTION_INDEX.md), [approved product and
-system design](../../docs/superpowers/specs/2026-09-01-localelens-design.md),
-[Phase 2 implementation
-plan](../../docs/superpowers/plans/2026-09-01-localelens-phase-2-secure-capture.md),
-[selected visual direction](../../docs/design/localelens-visual-direction.md),
-[Phase 1 evidence](../../docs/evidence/localelens-phase-1.md), [Phase 2
-evidence](docs/evidence/phase-2.md), and [Phase 3
-evidence](docs/evidence/phase-3.md), [Phase 4
-evidence](docs/evidence/phase-4.md), and [Phase 4 visual
-review](docs/evidence/visual-review.md).
+Phase 4 is owner accepted at `ec05f42bfadce32a406ffd1e883c03582aacfb90`.
+Phase 5 Tasks 1–3 are in progress. Task 4, push, deployment, publication,
+submission, posting, pull request, and merge remain unauthorized.
