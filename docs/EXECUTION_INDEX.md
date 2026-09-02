@@ -1,6 +1,6 @@
 # LocaleLens Execution Index
 
-Status: Phase 3 complete; Phase 4 not started
+Status: Phase 3 owner accepted; Phase 4 in progress
 
 Owner: Billy Tompazis
 
@@ -78,8 +78,8 @@ Complete this table only with verified Git evidence during execution.
 | 0 | `d304843f5ea0edb5c27829bb2ca30868645bef7a` | `53b73806c6205d8181bf19b7fc0f8cd81e7ad18c` | PASS: 19 tests, typecheck, lint, build, dependency inspection | 0 | Yes |
 | 1 | `53b73806c6205d8181bf19b7fc0f8cd81e7ad18c` | `6ae07c11d58f2fce27e3cdca84b75578968a04cc` | PASS: 33 tests, typecheck, lint, build, Browser at 360/768/1440 | 0 | Yes |
 | 2 | `5691271ce2027ff8e1a61b04a3991ab7e72e088a` | Final Phase 2 branch head (reported after evidence commit) | PASS: 147 tests, typecheck, lint, build, secret inspection, runtime guards, one recorded US capture using Solari's documented residential default with a matching provider-country receipt, and one honest pending replay lookup | 1 capture + 1 replay lookup | No |
-| 3 | `026b6ffe4d3faca5e8c02c29885846675e699cfd` | Current Phase 3 branch head | PASS: 210 tests, typecheck, lint, build, bounded live comparison, replay checks, export safety | 4 capture + 3 replay | No |
-| 4 | Not started | Not started | Not run | 0 | No |
+| 3 | `026b6ffe4d3faca5e8c02c29885846675e699cfd` | `06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` | PASS: 210 tests, typecheck, lint, build, bounded live comparison, replay checks, export safety | 4 capture + 3 replay | Yes |
+| 4 | `06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` | In progress | In progress | 0 | No |
 | 5 | Not started | Not started | Not run | 0 | No |
 
 ## Evidence classes
@@ -112,9 +112,9 @@ Runtime dependencies are limited to Next.js, React, React DOM, Tailwind CSS, Luc
 
 ## Current next gate
 
-Phase 3 is complete at the current Phase 3 branch head with evidence recorded
-in [`phase-3.md`](../examples/localelens-web/docs/evidence/phase-3.md). This
-record does not claim owner acceptance. Phase 4 is not started and remains
-unauthorized without a separate owner-authorized task anchored to the exact
-Phase 3 terminal SHA. Do not infer that authorization from Phase 3 completion,
-the retained local Solari key, or the pending replay state.
+Phase 3 is complete and owner accepted at
+`06bfba6efd2c9ef4ef98cc0eb9266afd377082fa`, with evidence recorded in
+[`phase-3.md`](../examples/localelens-web/docs/evidence/phase-3.md). Phase 4 is
+authorized only by the owner task anchored to that exact SHA and is now in
+progress on `codex/localelens-phase-4-hardening`. This does not authorize Phase
+5, a push, deployment, public submission, or social posting.
