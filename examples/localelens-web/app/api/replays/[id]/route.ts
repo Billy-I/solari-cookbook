@@ -7,6 +7,10 @@ export const dynamic = "force-dynamic";
 const replayIdPattern = /^[A-Za-z0-9_.:-]{6,500}$/;
 const maxReplayUrlLength = 4_096;
 const noStoreHeaders = { "Cache-Control": "no-store" };
+const allowedMethodHeaders = {
+  ...noStoreHeaders,
+  Allow: "GET, HEAD, OPTIONS",
+};
 
 type ReplayContext = {
   params: Promise<{ id: string }>;
@@ -14,6 +18,19 @@ type ReplayContext = {
 
 function json(body: unknown, status: number): Response {
   return Response.json(body, { status, headers: noStoreHeaders });
+}
+
+function methodNotAllowed(): Response {
+  return new Response(null, { status: 405, headers: allowedMethodHeaders });
+}
+
+export const POST = methodNotAllowed;
+export const PUT = methodNotAllowed;
+export const PATCH = methodNotAllowed;
+export const DELETE = methodNotAllowed;
+
+export function OPTIONS(): Response {
+  return new Response(null, { status: 204, headers: allowedMethodHeaders });
 }
 
 function errorStatus(error: unknown): number | undefined {

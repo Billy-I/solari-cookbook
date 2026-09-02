@@ -6,7 +6,9 @@ const { captureRegion } = vi.hoisted(() => ({
 
 vi.mock("@/src/features/capture/capture-region", () => ({ captureRegion }));
 
-import { POST } from "@/app/api/captures/route";
+import * as captureRoute from "@/app/api/captures/route";
+
+const { POST } = captureRoute;
 
 const originalLiveCaptureEnabled = process.env.LIVE_CAPTURE_ENABLED;
 const originalApiKey = process.env.SOLARI_API_KEY;
@@ -99,6 +101,42 @@ afterEach(() => {
 });
 
 describe("POST /api/captures", () => {
+  it.each(["GET", "HEAD", "PUT", "PATCH", "DELETE"] as const)(
+    "returns a no-store 405 for unsupported %s requests",
+    async (method) => {
+      const handler = Reflect.get(captureRoute, method) as
+        | ((request: Request) => Response | Promise<Response>)
+        | undefined;
+
+      expect(handler).toBeTypeOf("function");
+      if (!handler) throw new Error(`Missing ${method} route handler.`);
+
+      const response = await handler(
+        new Request("http://localhost/api/captures", { method }),
+      );
+
+      expect(response.status).toBe(405);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      expect(response.headers.get("Allow")).toBe("POST, OPTIONS");
+      expect(await response.text()).toBe("");
+    },
+  );
+
+  it("returns a no-store response to OPTIONS requests", async () => {
+    const handler = Reflect.get(captureRoute, "OPTIONS") as
+      | (() => Response | Promise<Response>)
+      | undefined;
+
+    expect(handler).toBeTypeOf("function");
+    if (!handler) throw new Error("Missing OPTIONS route handler.");
+
+    const response = await handler();
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Allow")).toBe("POST, OPTIONS");
+  });
+
   it("fails closed when live capture is disabled", async () => {
     process.env.LIVE_CAPTURE_ENABLED = "false";
     process.env.SOLARI_API_KEY = "unit-test-key";

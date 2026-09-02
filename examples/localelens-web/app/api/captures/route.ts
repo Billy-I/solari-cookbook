@@ -14,6 +14,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const noStoreHeaders = { "Cache-Control": "no-store" };
+const allowedMethodHeaders = {
+  ...noStoreHeaders,
+  Allow: "POST, OPTIONS",
+};
 class BodyTooLargeError extends Error {}
 
 async function readBoundedBody(request: Request): Promise<string> {
@@ -56,6 +60,20 @@ function json(body: unknown, status: number): Response {
 
 function failure(code: SafeCaptureErrorCode, status: number): Response {
   return json(toSafeCaptureFailure(new Error(code)), status);
+}
+
+function methodNotAllowed(): Response {
+  return new Response(null, { status: 405, headers: allowedMethodHeaders });
+}
+
+export const GET = methodNotAllowed;
+export const HEAD = methodNotAllowed;
+export const PUT = methodNotAllowed;
+export const PATCH = methodNotAllowed;
+export const DELETE = methodNotAllowed;
+
+export function OPTIONS(): Response {
+  return new Response(null, { status: 204, headers: allowedMethodHeaders });
 }
 
 function failureStatus(code: CaptureFailure["error"]["code"]): number {

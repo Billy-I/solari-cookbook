@@ -17,7 +17,9 @@ const { client, createSolariClient, getReplayUrl, logServerEvent } = vi.hoisted(
 vi.mock("@/src/lib/solari", () => ({ createSolariClient }));
 vi.mock("@/src/lib/server-observability", () => ({ logServerEvent }));
 
-import { GET } from "@/app/api/replays/[id]/route";
+import * as replayRoute from "@/app/api/replays/[id]/route";
+
+const { GET } = replayRoute;
 
 const originalLiveCaptureEnabled = process.env.LIVE_CAPTURE_ENABLED;
 const originalApiKey = process.env.SOLARI_API_KEY;
@@ -54,6 +56,44 @@ afterEach(() => {
 });
 
 describe("GET /api/replays/:id", () => {
+  it.each(["POST", "PUT", "PATCH", "DELETE"] as const)(
+    "returns a no-store 405 for unsupported %s requests",
+    async (method) => {
+      const handler = Reflect.get(replayRoute, method) as
+        | ((request: Request) => Response | Promise<Response>)
+        | undefined;
+
+      expect(handler).toBeTypeOf("function");
+      if (!handler) throw new Error(`Missing ${method} route handler.`);
+
+      const response = await handler(
+        new Request("http://localhost/api/replays/safe-session-id", {
+          method,
+        }),
+      );
+
+      expect(response.status).toBe(405);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      expect(response.headers.get("Allow")).toBe("GET, HEAD, OPTIONS");
+      expect(await response.text()).toBe("");
+    },
+  );
+
+  it("returns a no-store response to OPTIONS requests", async () => {
+    const handler = Reflect.get(replayRoute, "OPTIONS") as
+      | (() => Response | Promise<Response>)
+      | undefined;
+
+    expect(handler).toBeTypeOf("function");
+    if (!handler) throw new Error("Missing OPTIONS route handler.");
+
+    const response = await handler();
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Allow")).toBe("GET, HEAD, OPTIONS");
+  });
+
   it("fails closed when live capture is disabled", async () => {
     process.env.LIVE_CAPTURE_ENABLED = "false";
     process.env.SOLARI_API_KEY = "unit-test-key";
