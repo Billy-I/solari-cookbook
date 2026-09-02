@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CAPTURE_LIMITS } from "./limits";
+
 export const SUPPORTED_COUNTRIES = [
   "us",
   "gb",
@@ -133,8 +135,8 @@ export const reportSchema = z
     status: z.enum(["complete", "partial"]),
     mode: z.enum(["sample", "live"]),
     requestedUrl: httpsUrlSchema,
-    countries: z.array(supportedCountrySchema).min(2).max(3),
-    results: z.array(reportResultSchema).min(1).max(3),
+    countries: z.array(supportedCountrySchema).min(2).max(CAPTURE_LIMITS.maxCountries),
+    results: z.array(reportResultSchema).min(1).max(CAPTURE_LIMITS.maxCountries),
     generatedAt: z.iso.datetime({ offset: true }),
   })
   .strict();

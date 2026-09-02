@@ -6,10 +6,13 @@ import {
   type CaptureResponse,
   type SupportedCountry,
 } from "@/src/features/capture/contracts";
+import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 import { toSafeCaptureFailure } from "@/src/features/capture/safe-error";
 
 const clientTimeoutMs = 45_000;
 const maximumUnresolvedTransports = 3;
+
+class ResponseTooLargeError extends Error {}
 
 export type PublicCaptureError = CaptureFailure["error"];
 
@@ -121,6 +124,41 @@ async function settleRequest<T>(
   }
 }
 
+async function readBoundedJson(response: Response): Promise<unknown> {
+  const contentLength = response.headers.get("Content-Length");
+  if (
+    contentLength !== null &&
+    /^\d+$/.test(contentLength) &&
+    BigInt(contentLength) > BigInt(CAPTURE_LIMITS.responseBytes)
+  ) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new ResponseTooLargeError();
+  }
+
+  if (!response.body) return response.json();
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let byteLength = 0;
+  let text = "";
+
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      byteLength += next.value.byteLength;
+      if (byteLength > CAPTURE_LIMITS.responseBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new ResponseTooLargeError();
+      }
+      text += decoder.decode(next.value, { stream: true });
+    }
+    return JSON.parse(text + decoder.decode());
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 async function runCountryRequest(
   country: SupportedCountry,
   url: string,
@@ -143,7 +181,7 @@ async function runCountryRequest(
           method: "POST",
           signal,
         });
-        return { response, body: await response.json() };
+        return { response, body: await readBoundedJson(response) };
       }),
       signal,
     );
@@ -218,7 +256,7 @@ export function validateSelectedCountries(
 
   if (
     countries.length < 2 ||
-    countries.length > 3 ||
+    countries.length > CAPTURE_LIMITS.maxCountries ||
     uniqueCountries.size !== countries.length ||
     countries.some(
       (country) => !SUPPORTED_COUNTRIES.includes(country as SupportedCountry),

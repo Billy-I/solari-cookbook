@@ -257,18 +257,27 @@ describe("captureRegion", () => {
     expect(lifecycle.client.close).toHaveBeenCalledOnce();
   });
 
-  it("rejects a screenshot above 1.5 MB before base64 encoding", async () => {
+  it("accepts a screenshot at 1.5 MB and rejects one byte over before base64 encoding", async () => {
     const lifecycle = createLifecycle();
-    lifecycle.page.screenshot.mockResolvedValueOnce(new Uint8Array(1_500_001));
+    lifecycle.page.screenshot.mockResolvedValueOnce(new Uint8Array(1_500_000));
 
-    const result = await captureRegion(
+    const atLimit = await captureRegion(
       { url: "https://example.com/", country: "us" },
       lifecycle.dependencies,
     );
 
+    expect(atLimit.ok).toBe(true);
+
+    const oneByteOver = createLifecycle();
+    oneByteOver.page.screenshot.mockResolvedValueOnce(new Uint8Array(1_500_001));
+    const result = await captureRegion(
+      { url: "https://example.com/", country: "us" },
+      oneByteOver.dependencies,
+    );
+
     expect(result).toMatchObject({ ok: false, error: { code: "CAPTURE_FAILED" } });
-    expect(lifecycle.browser.close).toHaveBeenCalledOnce();
-    expect(lifecycle.client.close).toHaveBeenCalledOnce();
+    expect(oneByteOver.browser.close).toHaveBeenCalledOnce();
+    expect(oneByteOver.client.close).toHaveBeenCalledOnce();
   });
 
   it("attempts client cleanup when browser cleanup itself fails", async () => {

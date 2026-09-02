@@ -139,14 +139,29 @@ describe("createJsonReport", () => {
     expect(report.failures).toEqual([]);
   });
 
-  it("fails closed when UTF-8 JSON serialization exceeds 256 KiB", () => {
+  it("accepts an export at exactly 256 KiB", () => {
     const input = partialInput();
-    const oversized = successfulRegion("us");
-    if (!oversized.response?.ok) throw new Error("Expected a successful fixture.");
-    oversized.response.evidence.title = "é".repeat(140_000);
+    const failure = input.regions[1];
+    if (!failure || !failure.response || failure.response.ok) {
+      throw new Error("Expected a failed fixture.");
+    }
+    failure.response.error.message = "x".repeat(258_368);
+
+    const output = createJsonReport(input);
+
+    expect(output.byteLength).toBe(262_144);
+  });
+
+  it("fails closed when UTF-8 JSON serialization exceeds 256 KiB by one byte", () => {
+    const input = partialInput();
+    const failure = input.regions[1];
+    if (!failure || !failure.response || failure.response.ok) {
+      throw new Error("Expected a failed fixture.");
+    }
+    failure.response.error.message = "x".repeat(258_369);
 
     expect(() =>
-      createJsonReport({ ...input, regions: [oversized, successfulRegion("de")] }),
+      createJsonReport(input),
     ).toThrow("Report exceeds the 256 KiB export limit.");
   });
 });

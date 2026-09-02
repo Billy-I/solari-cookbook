@@ -1,4 +1,5 @@
 import { captureRegion } from "@/src/features/capture/capture-region";
+import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 import {
   captureRequestSchema,
   SUPPORTED_COUNTRIES,
@@ -13,15 +14,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const noStoreHeaders = { "Cache-Control": "no-store" };
-const maxBodyBytes = 2_048;
-
 class BodyTooLargeError extends Error {}
 
 async function readBoundedBody(request: Request): Promise<string> {
   const contentLength = request.headers.get("Content-Length");
   if (contentLength !== null) {
     if (!/^\d+$/.test(contentLength)) throw new Error("invalid length");
-    if (BigInt(contentLength) > BigInt(maxBodyBytes)) {
+    if (BigInt(contentLength) > BigInt(CAPTURE_LIMITS.requestBytes)) {
       await request.body?.cancel().catch(() => undefined);
       throw new BodyTooLargeError();
     }
@@ -39,7 +38,7 @@ async function readBoundedBody(request: Request): Promise<string> {
       const next = await reader.read();
       if (next.done) break;
       byteLength += next.value.byteLength;
-      if (byteLength > maxBodyBytes) {
+      if (byteLength > CAPTURE_LIMITS.requestBytes) {
         await reader.cancel().catch(() => undefined);
         throw new BodyTooLargeError();
       }

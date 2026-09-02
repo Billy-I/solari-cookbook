@@ -6,6 +6,7 @@ import {
   SUPPORTED_COUNTRIES,
   type SupportedCountry,
 } from "@/src/features/capture/contracts";
+import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 
 const countryNames: Record<SupportedCountry, string> = {
   us: "United States",
@@ -53,7 +54,10 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
   function toggleCountry(country: SupportedCountry) {
     setCountries((current) => {
       const isSelected = current.includes(country);
-      if ((isSelected && current.length === 2) || (!isSelected && current.length === 3)) {
+      if (
+        (isSelected && current.length === 2) ||
+        (!isSelected && current.length === CAPTURE_LIMITS.maxCountries)
+      ) {
         return current;
       }
 
@@ -105,7 +109,8 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
           {SUPPORTED_COUNTRIES.map((country) => {
             const selected = countries.includes(country);
             const atMinimum = selected && countries.length === 2;
-            const atMaximum = !selected && countries.length === 3;
+            const atMaximum =
+              !selected && countries.length === CAPTURE_LIMITS.maxCountries;
 
             return (
               <label className="country-option" key={country}>

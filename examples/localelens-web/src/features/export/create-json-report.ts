@@ -8,8 +8,7 @@ import type {
   SafeCaptureErrorCode,
   SupportedCountry,
 } from "@/src/features/capture/contracts";
-
-const maxReportBytes = 256 * 1024;
+import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 
 const limitations = [
   "Public pages only.",
@@ -184,7 +183,7 @@ export function createJsonReport(input: JsonReportInput): JsonReportOutput {
   const json = JSON.stringify(report, null, 2);
   const byteLength = new TextEncoder().encode(json).byteLength;
 
-  if (byteLength > maxReportBytes) {
+  if (byteLength > CAPTURE_LIMITS.exportBytes) {
     throw new Error("Report exceeds the 256 KiB export limit.");
   }
 

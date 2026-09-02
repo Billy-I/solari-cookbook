@@ -144,14 +144,20 @@ describe("POST /api/captures", () => {
     });
   });
 
-  it("rejects request bodies above 2 KB", async () => {
+  it("accepts a request body at 2 KiB and rejects one byte over", async () => {
     process.env.LIVE_CAPTURE_ENABLED = "true";
     process.env.SOLARI_API_KEY = "unit-test-key";
 
-    const response = await POST(jsonRequest("x".repeat(2_049)));
+    const atLimit = await POST(jsonRequest("x".repeat(2_048)));
+    const oneByteOver = await POST(jsonRequest("x".repeat(2_049)));
 
-    expect(response.status).toBe(413);
-    expect(await expectNoStore(response)).toMatchObject({
+    expect(atLimit.status).toBe(400);
+    expect(await expectNoStore(atLimit)).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_INPUT" },
+    });
+    expect(oneByteOver.status).toBe(413);
+    expect(await expectNoStore(oneByteOver)).toMatchObject({
       ok: false,
       error: { code: "INVALID_INPUT" },
     });

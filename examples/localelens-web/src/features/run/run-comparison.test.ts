@@ -210,10 +210,9 @@ describe("runComparison", () => {
     vi.useFakeTimers();
     const fetch = vi
       .fn()
-      .mockResolvedValueOnce({
-        json: () => new Promise<never>(() => undefined),
-        ok: true,
-      } as unknown as Response)
+      .mockResolvedValueOnce(
+        new Response(new ReadableStream<Uint8Array>({ start: () => undefined })),
+      )
       .mockResolvedValueOnce(response(sampleCaptureByCountry.gb));
     vi.stubGlobal("fetch", fetch);
     const runEvents = events();

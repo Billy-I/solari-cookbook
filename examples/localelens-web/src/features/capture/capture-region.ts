@@ -11,6 +11,7 @@ import {
   type ExtractedPageEvidence,
   type ExtractPageEvidenceInput,
 } from "./extract-page-evidence";
+import { CAPTURE_LIMITS } from "./limits";
 import { toSafeCaptureFailure } from "./safe-error";
 import { validatePublicUrl, type ResolveHost } from "./validate-public-url";
 
@@ -249,14 +250,14 @@ export async function captureRegion(
         navigationResponse = await run(() =>
           page.goto(validatedUrl.href, {
             waitUntil: "domcontentloaded",
-            timeout: 30_000,
+            timeout: CAPTURE_LIMITS.navigationMs,
           }),
         );
       } catch (error) {
         throw navigationGuardError ?? error;
       }
 
-      await run(() => page.waitForTimeout(2_000));
+      await run(() => page.waitForTimeout(CAPTURE_LIMITS.settleMs));
       const finalUrl = await run(() =>
         validatePublicUrl(page.url(), dependencies.resolveHost),
       );
@@ -282,7 +283,7 @@ export async function captureRegion(
           fullPage: true,
         }),
       );
-      if (screenshotBytes.byteLength > 1_500_000) {
+      if (screenshotBytes.byteLength > CAPTURE_LIMITS.screenshotBytes) {
         throw new Error("CAPTURE_FAILED");
       }
 
