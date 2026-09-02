@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   SUPPORTED_COUNTRIES,
   type SupportedCountry,
-} from "@/src/features/capture/contracts";
+} from "@/src/features/capture/countries";
 import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 
 const countryNames: Record<SupportedCountry, string> = {

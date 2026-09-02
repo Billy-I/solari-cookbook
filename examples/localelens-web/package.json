@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:sample": "npm run test:e2e",
+    "check:budget": "node scripts/check-client-budget.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },

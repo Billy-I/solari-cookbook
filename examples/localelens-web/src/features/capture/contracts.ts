@@ -1,15 +1,14 @@
 import { z } from "zod";
 
+import { SUPPORTED_COUNTRIES, type SupportedCountry } from "./countries";
+import { SAFE_CAPTURE_ERROR_CODES } from "./error-codes";
 import { CAPTURE_LIMITS } from "./limits";
 
-export const SUPPORTED_COUNTRIES = [
-  "us",
-  "gb",
-  "de",
-  "fr",
-  "jp",
-  "au",
-] as const;
+export { SUPPORTED_COUNTRIES, type SupportedCountry } from "./countries";
+export {
+  SAFE_CAPTURE_ERROR_CODES,
+  type SafeCaptureErrorCode,
+} from "./error-codes";
 
 const supportedCountrySchema = z.enum(SUPPORTED_COUNTRIES);
 
@@ -72,18 +71,6 @@ const captureSuccessSchema = z
   })
   .strict();
 
-export const SAFE_CAPTURE_ERROR_CODES = [
-  "INVALID_INPUT",
-  "UNSUPPORTED_COUNTRY",
-  "PRIVATE_TARGET_BLOCKED",
-  "NAVIGATION_TIMEOUT",
-  "TARGET_BLOCKED",
-  "SOLARI_CAPACITY",
-  "SOLARI_AUTH",
-  "SOLARI_PROXY_MISMATCH",
-  "CAPTURE_FAILED",
-] as const;
-
 const captureFailureSchema = z
   .object({
     ok: z.literal(false),
@@ -141,13 +128,10 @@ export const reportSchema = z
   })
   .strict();
 
-export type SupportedCountry = z.infer<typeof supportedCountrySchema>;
 export type CaptureRequest = z.infer<typeof captureRequestSchema>;
 export type PageEvidence = z.infer<typeof pageEvidenceSchema>;
 export type CaptureReceipt = z.infer<typeof captureReceiptSchema>;
 export type CaptureSuccess = z.infer<typeof captureSuccessSchema>;
-export type SafeCaptureErrorCode =
-  (typeof SAFE_CAPTURE_ERROR_CODES)[number];
 export type CaptureFailure = z.infer<typeof captureFailureSchema>;
 export type CaptureResponse = z.infer<typeof captureResponseSchema>;
 export type ComparisonCapture = {

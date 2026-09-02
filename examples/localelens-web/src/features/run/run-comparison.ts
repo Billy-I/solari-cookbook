@@ -1,11 +1,13 @@
 import type { AuditFormValue } from "@/src/components/audit-form";
 import {
-  SUPPORTED_COUNTRIES,
-  captureResponseSchema,
   type CaptureFailure,
   type CaptureResponse,
-  type SupportedCountry,
 } from "@/src/features/capture/contracts";
+import {
+  SUPPORTED_COUNTRIES,
+  type SupportedCountry,
+} from "@/src/features/capture/countries";
+import { SAFE_CAPTURE_ERROR_CODES } from "@/src/features/capture/error-codes";
 import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 import { toSafeCaptureFailure } from "@/src/features/capture/safe-error";
 
@@ -159,6 +161,106 @@ async function readBoundedJson(response: Response): Promise<unknown> {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isString(value: unknown, maximumLength: number): value is string {
+  return typeof value === "string" && value.length <= maximumLength;
+}
+
+function isNonEmptyString(value: unknown, maximumLength: number): value is string {
+  return isString(value, maximumLength) && value.length > 0;
+}
+
+function isNullableString(value: unknown, maximumLength: number): boolean {
+  return value === null || isString(value, maximumLength);
+}
+
+function isStringArray(value: unknown, maximumItems: number, maximumLength: number): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length <= maximumItems &&
+    value.every((item) => isString(item, maximumLength))
+  );
+}
+
+function isHttpsUrl(value: unknown): value is string {
+  if (!isNonEmptyString(value, 2048)) return false;
+
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isSupportedCountry(value: unknown): value is SupportedCountry {
+  return (
+    typeof value === "string" &&
+    SUPPORTED_COUNTRIES.includes(value as SupportedCountry)
+  );
+}
+
+function isCaptureResponse(body: unknown): body is CaptureResponse {
+  if (!isRecord(body) || typeof body.ok !== "boolean") return false;
+
+  if (!body.ok) {
+    return (
+      isRecord(body.error) &&
+      typeof body.error.code === "string" &&
+      SAFE_CAPTURE_ERROR_CODES.includes(
+        body.error.code as (typeof SAFE_CAPTURE_ERROR_CODES)[number],
+      ) &&
+      isNonEmptyString(body.error.message, 240) &&
+      typeof body.error.retryable === "boolean"
+    );
+  }
+
+  if (
+    !isRecord(body.evidence) ||
+    !isRecord(body.receipt) ||
+    !isRecord(body.screenshot)
+  ) {
+    return false;
+  }
+
+  const { evidence, receipt, screenshot } = body;
+  const httpStatus = evidence.httpStatus;
+  const screenshotWidth = screenshot.width;
+  return (
+    isHttpsUrl(evidence.requestedUrl) &&
+    isHttpsUrl(evidence.finalUrl) &&
+    isNullableString(evidence.title, 200) &&
+    isNullableString(evidence.documentLanguage, 35) &&
+    isNullableString(evidence.primaryHeading, 240) &&
+    isNullableString(evidence.primaryAction, 120) &&
+    isStringArray(evidence.ctas, 20, 120) &&
+    isStringArray(evidence.currencies, 12, 20) &&
+    isStringArray(evidence.priceSnippets, 8, 160) &&
+    isNullableString(evidence.consentText, 500) &&
+    (httpStatus === null ||
+      (typeof httpStatus === "number" &&
+        Number.isInteger(httpStatus) &&
+        httpStatus >= 100 &&
+        httpStatus <= 599)) &&
+    isNonEmptyString(evidence.capturedAt, 64) &&
+    !Number.isNaN(Date.parse(evidence.capturedAt)) &&
+    isSupportedCountry(receipt.country) &&
+    isSupportedCountry(receipt.proxyCountry) &&
+    receipt.proxyTier === "residential" &&
+    isNullableString(receipt.timezoneId, 100) &&
+    isNonEmptyString(receipt.sessionId, 500) &&
+    receipt.recordingRequested === true &&
+    screenshot.mediaType === "image/jpeg" &&
+    isNonEmptyString(screenshot.base64, 2_000_000) &&
+    typeof screenshotWidth === "number" &&
+    Number.isInteger(screenshotWidth) &&
+    screenshotWidth > 0 &&
+    screenshotWidth <= 4096
+  );
+}
+
 async function runCountryRequest(
   country: SupportedCountry,
   url: string,
@@ -185,22 +287,22 @@ async function runCountryRequest(
       }),
       signal,
     );
-    const parsed = captureResponseSchema.safeParse(body);
+    const parsed = isCaptureResponse(body) ? body : null;
 
     if (signal.aborted) throw abortReason(signal);
     if (
-      parsed.success &&
+      parsed &&
       response.ok &&
-      parsed.data.ok &&
-      parsed.data.receipt.country === country &&
-      parsed.data.receipt.proxyCountry === country
+      parsed.ok &&
+      parsed.receipt.country === country &&
+      parsed.receipt.proxyCountry === country
     ) {
-      outcome = { type: "succeeded", response: parsed.data };
+      outcome = { type: "succeeded", response: parsed };
     } else if (
-      parsed.success &&
-      parsed.data.ok &&
-      (parsed.data.receipt.country !== country ||
-        parsed.data.receipt.proxyCountry !== country)
+      parsed &&
+      parsed.ok &&
+      (parsed.receipt.country !== country ||
+        parsed.receipt.proxyCountry !== country)
     ) {
       outcome = {
         type: "failed",
@@ -210,8 +312,8 @@ async function runCountryRequest(
       outcome = {
         type: "failed",
         error:
-          parsed.success && !parsed.data.ok
-            ? parsed.data.error
+          parsed && !parsed.ok
+            ? parsed.error
             : safeError("CAPTURE_FAILED"),
       };
     }
