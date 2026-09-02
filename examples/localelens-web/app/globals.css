@@ -44,7 +44,7 @@ select {
 }
 
 :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--signal) 60%, white);
+  outline: 3px solid var(--signal);
   outline-offset: 2px;
 }
 

@@ -30,6 +30,76 @@ async function startSampleRun(page: Page, thirdMarket: "France" | "Germany") {
   await page.getByRole("button", { name: "Compare markets" }).click();
 }
 
+function measureFocusContrast(element: Element) {
+  type Rgba = [number, number, number, number];
+
+  function parseColor(value: string): Rgba {
+    const rgb = value.match(/^rgba?\((.+)\)$/);
+    if (rgb) {
+      const components = rgb[1];
+      if (components === undefined) throw new Error(`Invalid computed color: ${value}`);
+      const [red = Number.NaN, green = Number.NaN, blue = Number.NaN, alpha = 1] =
+        components.split(/[\s,/]+/).filter(Boolean).map(Number);
+      if (![red, green, blue, alpha].every(Number.isFinite)) {
+        throw new Error(`Invalid computed color: ${value}`);
+      }
+      return [red, green, blue, alpha];
+    }
+
+    const srgb = value.match(/^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)$/);
+    if (srgb) {
+      return [
+        Number(srgb[1]) * 255,
+        Number(srgb[2]) * 255,
+        Number(srgb[3]) * 255,
+        srgb[4] === undefined ? 1 : Number(srgb[4]),
+      ];
+    }
+
+    throw new Error(`Unsupported computed color: ${value}`);
+  }
+
+  function effectiveBackground(start: Element): { color: string; rgb: Rgba } {
+    let current: Element | null = start;
+    while (current) {
+      const color = getComputedStyle(current).backgroundColor;
+      const parsed = parseColor(color);
+      if (parsed[3] > 0) return { color, rgb: parsed };
+      current = current.parentElement;
+    }
+    return { color: "rgb(255, 255, 255)", rgb: [255, 255, 255, 1] };
+  }
+
+  function luminance([red, green, blue]: Rgba): number {
+    function channelLuminance(channel: number): number {
+      const normalized = channel / 255;
+      return normalized <= 0.04045
+        ? normalized / 12.92
+        : ((normalized + 0.055) / 1.055) ** 2.4;
+    }
+
+    return (
+      0.2126 * channelLuminance(red) +
+      0.7152 * channelLuminance(green) +
+      0.0722 * channelLuminance(blue)
+    );
+  }
+
+  const outlineColor = getComputedStyle(element).outlineColor;
+  const background = effectiveBackground(element.parentElement ?? element);
+  const outlineLuminance = luminance(parseColor(outlineColor));
+  const backgroundLuminance = luminance(background.rgb);
+  const ratio =
+    (Math.max(outlineLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(outlineLuminance, backgroundLuminance) + 0.05);
+
+  return {
+    adjacentBackground: background.color,
+    outlineColor,
+    ratio: Number(ratio.toFixed(3)),
+  };
+}
+
 test("idle sample state has no automated axe violations", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Ready to compare", { exact: true })).toBeVisible();
@@ -53,18 +123,31 @@ test("validation error is focused and has no automated axe violations", async ({
 test("running state uses one polite live region without moving submit focus", async ({
   page,
 }) => {
+  const installedAt = new Date("2026-09-02T08:00:00.000Z");
+  await page.clock.install({ time: installedAt });
   await page.goto("/");
   const compare = page.getByRole("button", { name: "Compare markets" });
   await page.getByRole("textbox", { name: "URL (HTTPS)" }).fill(targetUrl);
   await page.getByRole("checkbox", { name: "Germany" }).check();
   await compare.focus();
+  await page.clock.pauseAt(new Date(installedAt.getTime() + 60_000));
   await compare.click();
 
   const liveRegion = page.locator('[role="status"][aria-live="polite"]');
   await expect(liveRegion).toHaveCount(1);
-  await expect(liveRegion).toContainText(/Queued|Launching browser|Loading page/);
+  await expect(liveRegion.getByText("Queued", { exact: true })).toHaveCount(3);
+  await expect(liveRegion.getByText("Complete", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".receipt-row").getByText("running", { exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "URL (HTTPS)" })).toBeDisabled();
   await expect(compare).toBeFocused();
-  await expectAxeClean(page);
+  const axeAnalysis = new AxeBuilder({ page }).analyze();
+  await page.clock.runFor(200);
+  const axeResults = await axeAnalysis;
+  expect(axeResults.violations).toEqual([]);
+  await expect(liveRegion.getByRole("listitem")).toHaveCount(3);
+  await expect(liveRegion.getByText("Complete", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".receipt-row").getByText("running", { exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "URL (HTTPS)" })).toBeDisabled();
 });
 
 test("complete state exposes descriptive screenshots and labeled comparison structures", async ({
@@ -142,6 +225,11 @@ test("keyboard order is stable and every focused control has a visible outline",
     expect(focusStyle.style).not.toBe("none");
     expect(focusStyle.width).toBeGreaterThanOrEqual(2);
     expect(focusStyle.color).not.toBe("rgba(0, 0, 0, 0)");
+    const contrast = await target.evaluate(measureFocusContrast);
+    expect(
+      contrast.ratio,
+      `Focus indicator ${contrast.outlineColor} against ${contrast.adjacentBackground}`,
+    ).toBeGreaterThanOrEqual(3);
   }
 });
 
