@@ -41,7 +41,7 @@ No other source change was justified by the observed evidence.
 
 | Boundary | Evidence | Result |
 | --- | --- | --- |
-| Invalid HTTP methods | Production HTTP regression covers capture `GET`, `HEAD`, `PUT`, `PATCH`, `DELETE`, `PROPFIND`, `MKCOL`, and `TRACE`; replay `POST`, `PUT`, `PATCH`, `DELETE`, `PROPFIND`, `MKCOL`, and `TRACE`. Route tests separately cover explicit `OPTIONS`. | PASS for every app-reachable method: structured `405` except the bodyless `HEAD`, exact `Allow`, and `private, no-store`; `OPTIONS` is an empty `204` with `no-store`. `TRACE` is NOT PROVEN because Next rejects it before Proxy. |
+| Invalid HTTP methods | Production HTTP regression covers capture `GET`, `HEAD`, `PUT`, `PATCH`, `DELETE`, `PROPFIND`, `MKCOL`, `OPTIONS`, and `TRACE`; replay `POST`, `PUT`, `PATCH`, `DELETE`, `PROPFIND`, `MKCOL`, `HEAD`, `OPTIONS`, and `TRACE`; plus root `PROPFIND`. | PASS for every app-reachable API method: structured `405` except the bodyless `HEAD`, exact `Allow`, and `private, no-store`; `OPTIONS` is an empty `204` with exact `Allow` and `no-store`; replay `HEAD` preserves the bodyless GET failure contract. Root `PROPFIND` remains outside the API guard. `TRACE` is NOT PROVEN because Next rejects it before Proxy. |
 | Malformed JSON | Capture route test and production HTTP probe. | PASS: `400` / `INVALID_INPUT`, stable allowlisted message, `no-store`, no internal path or stack detail. |
 | Oversized request | Exact 2 KiB boundary, one-byte-over, streamed-body, misleading-length, and declared-length tests plus production HTTP probe. | PASS: one byte over returns `413` / `INVALID_INPUT` before capture; streamed bodies remain bounded. |
 | Unsafe initial URL | URL-policy tests cover scheme, credentials, fragments, non-default ports, local names, private/reserved IPv4 and IPv6 literals, mixed public/private DNS answers, and unusable DNS answers. Capture lifecycle tests prove validation occurs before client construction. | PASS in unit/route evidence. No live adversarial DNS exercise was run. |
@@ -69,7 +69,8 @@ The final committed `npm run check:api-methods` regression starts its own
 production server with live mode disabled and no credential. It exercises raw
 methods through Node HTTP, asserts the exact status/body/`Allow`/cache contract,
 asserts no CORS header is introduced, proves allowed routes retain their
-default-off behavior, and proves `/` is outside the narrow Proxy matcher. These
+default-off behavior, checks both `OPTIONS` responses and replay `HEAD`, and
+proves `GET /` plus root `PROPFIND` are outside the narrow API guard. These
 probes spent zero Solari calls.
 
 | Probe | Observed result |
@@ -86,9 +87,11 @@ probes spent zero Solari calls.
 | replay `PROPFIND` and `MKCOL` | `405`, structured safe body, exact `Allow`, `private, no-store` |
 | replay `TRACE` | `500`; no `Allow` or structured method body; rejected before Proxy; NOT PROVEN |
 | replay `OPTIONS` | `204`, empty body, exact `Allow`, `no-store` |
+| replay `HEAD` | `403`, bodyless, with the same cache and content-type headers as the live-disabled replay `GET` |
 | invalid replay ID | `400` / `unavailable`, `no-store` |
 | capture and replay with live mode disabled | `403`, stable safe bodies, `no-store` |
 | `/` outside the Proxy matcher | `200`; application page unchanged |
+| root `PROPFIND` outside the API guard | framework `405` / `Allow: GET, HEAD`; not transformed into the structured API method response |
 
 The original failure probes asserted that responses contained no repository
 path, dependency path, stack-frame shape, key-shaped value, or synthetic
@@ -131,6 +134,12 @@ All commands below used explicit Node `v22.22.2`:
 | `npm run build` | PASS: static `/`; dynamic capture and replay routes; Proxy included |
 | `npm run check:api-methods` | PASS for all app-reachable methods and matcher-preservation checks; `TRACE` explicitly NOT PROVEN on both routes |
 | `npm run check:budget` | PASS: `151,540 B / 184,320 B` main-route gzip |
+
+The verification-only follow-up reran the two route files (`41` tests),
+typecheck, lint, a fresh build, `check:api-methods`, budget, and diff checks.
+The broad `234`-test suite was not rerun because this follow-up changed only
+the production-check script and evidence; production source remained exactly at
+`bc93748a3874f7f35520e2b5e6b4a7156e3cd74d`.
 
 ## Qualifications
 

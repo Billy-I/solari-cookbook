@@ -154,7 +154,19 @@ async function main() {
       "/api/replays/valid-session-id",
       "GET",
     );
+    const replayHead = await request(
+      port,
+      "/api/replays/valid-session-id",
+      "HEAD",
+    );
+    const captureOptions = await request(port, "/api/captures", "OPTIONS");
+    const replayOptions = await request(
+      port,
+      "/api/replays/valid-session-id",
+      "OPTIONS",
+    );
     const page = await request(port, "/", "GET");
+    const rootPropfind = await request(port, "/", "PROPFIND");
 
     if (
       capture.status !== 403 ||
@@ -184,10 +196,50 @@ async function main() {
         "GET /api/replays/valid-session-id: PASS (live-disabled route preserved)",
       );
     }
+    if (
+      replayHead.status !== replay.status ||
+      replayHead.headers["cache-control"] !== replay.headers["cache-control"] ||
+      replayHead.headers["content-type"] !== replay.headers["content-type"] ||
+      replayHead.headers.allow !== replay.headers.allow ||
+      replayHead.headers["access-control-allow-origin"] !== undefined ||
+      replayHead.body !== ""
+    ) {
+      failures.push("Allowed replay HEAD did not preserve GET failure semantics.");
+    } else {
+      console.log(
+        "HEAD /api/replays/valid-session-id: PASS (bodyless GET semantics)",
+      );
+    }
+    for (const [route, response] of [
+      [routes[0], captureOptions],
+      [routes[1], replayOptions],
+    ]) {
+      if (
+        response.status !== 204 ||
+        response.body !== "" ||
+        response.headers.allow !== route.allow ||
+        response.headers["cache-control"] !== "no-store" ||
+        response.headers["access-control-allow-origin"] !== undefined
+      ) {
+        failures.push(`OPTIONS ${route.path} did not preserve route semantics.`);
+      } else {
+        console.log(`OPTIONS ${route.path}: PASS`);
+      }
+    }
     if (page.status !== 200) {
       failures.push("The narrow Proxy matcher changed the main page response.");
     } else {
       console.log("GET /: PASS (outside narrow Proxy matcher)");
+    }
+    if (
+      rootPropfind.status !== 405 ||
+      rootPropfind.headers.allow !== "GET, HEAD" ||
+      rootPropfind.headers["cache-control"] !== undefined ||
+      rootPropfind.body === expectedBody
+    ) {
+      failures.push("PROPFIND / was transformed by the API method guard.");
+    } else {
+      console.log("PROPFIND /: PASS (outside API method guard)");
     }
 
     for (const route of routes) {
