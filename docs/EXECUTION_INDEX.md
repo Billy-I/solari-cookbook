@@ -1,6 +1,6 @@
 # LocaleLens Execution Index
 
-Status: Phase 4 owner accepted; Phase 5 Tasks 1–3 in progress
+Status: Phase 4 owner accepted; Phase 5 Tasks 1–3 locally frozen with concerns; Task 4 not started
 
 Owner: Billy Tompazis
 
@@ -80,7 +80,7 @@ Complete this table only with verified Git evidence during execution.
 | 2 | `5691271ce2027ff8e1a61b04a3991ab7e72e088a` | Final Phase 2 branch head (reported after evidence commit) | PASS: 147 tests, typecheck, lint, build, secret inspection, runtime guards, one recorded US capture using Solari's documented residential default with a matching provider-country receipt, and one honest pending replay lookup | 1 capture + 1 replay lookup | No |
 | 3 | `026b6ffe4d3faca5e8c02c29885846675e699cfd` | `06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` | PASS: 210 tests, typecheck, lint, build, bounded live comparison, replay checks, export safety | 4 capture + 3 replay | Yes |
 | 4 | `06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` | `ec05f42bfadce32a406ffd1e883c03582aacfb90` | PASS: owner accepted qualified local evidence | 4 capture + 6 replay | Yes |
-| 5 | `ec05f42bfadce32a406ffd1e883c03582aacfb90` | In progress | Tasks 1–3 in progress; Task 4 and all external actions remain unauthorized | 0 | No |
+| 5 | `ec05f42bfadce32a406ffd1e883c03582aacfb90` | Local freeze; terminal SHA reported externally | Tasks 1–3 locally frozen with concerns; Task 4 not started; all external actions remain unauthorized | 0 | No |
 
 ## Evidence classes
 
@@ -115,6 +115,7 @@ Runtime dependencies are limited to Next.js, React, React DOM, Tailwind CSS, Luc
 Phase 4 is owner accepted at
 `ec05f42bfadce32a406ffd1e883c03582aacfb90`, with qualified evidence recorded
 in [`phase-4.md`](../examples/localelens-web/docs/evidence/phase-4.md). Phase 5
-Tasks 1–3 are in progress on `codex/localelens-phase-5-submission`, created
-directly from that exact accepted predecessor. Task 4, push, deployment,
-publication, submission, posting, pull request, and merge remain unauthorized.
+Tasks 1–3 are locally frozen with concerns on
+`codex/localelens-phase-5-submission`, created directly from that exact
+accepted predecessor. Task 4 is not started. Push, deployment, publication,
+submission, posting, pull request, and merge remain unauthorized.

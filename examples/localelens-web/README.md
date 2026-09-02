@@ -112,8 +112,10 @@ recorded separately. See the [execution index](../../docs/EXECUTION_INDEX.md),
 Only server routes access `SOLARI_API_KEY` at request time. Targets must be
 public HTTPS addresses and pass hostname and DNS-address validation; credentials,
 fragments, non-default ports, local hosts, and private or reserved addresses are
-rejected. Screenshots, session IDs, replay URLs, raw page text, provider bodies,
-and environment values are excluded from logs and committed evidence.
+rejected. Live/provider screenshots, session IDs, replay URLs, raw page text,
+provider bodies, and environment values are excluded from logs and committed
+evidence. The sample screenshot above is intentionally committed reviewer
+evidence.
 
 This is qualified local evidence, not a production claim. Hosted or deployed
 behavior, direct screen-reader or VoiceOver output, actual browser-chrome 200%
@@ -124,5 +126,6 @@ method contract for `TRACE` remain `NOT PROVEN` as detailed in Phase 4 evidence.
 ## Phase boundary
 
 Phase 4 is owner accepted at `ec05f42bfadce32a406ffd1e883c03582aacfb90`.
-Phase 5 Tasks 1–3 are in progress. Task 4, push, deployment, publication,
-submission, posting, pull request, and merge remain unauthorized.
+Phase 5 Tasks 1–3 are locally frozen with concerns. Task 4 is not started.
+Push, deployment, publication, submission, posting, pull request, and merge
+remain unauthorized.

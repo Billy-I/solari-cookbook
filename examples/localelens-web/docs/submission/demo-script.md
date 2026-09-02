@@ -20,8 +20,8 @@ Show the regional evidence area and the receipt/replay controls or sample result
 
 ## 60–70 seconds — Export and evidence label
 
-Show JSON export and print output. Say: “I can export the bounded result as JSON or print it for review. The product distinguishes sample evidence from live evidence, so this recording does not overclaim provider-backed footage.”
+Show JSON export and print output. Say: “Export stays bounded and labeled: JSON or print, sample evidence—not provider footage.”
 
 ## 70–75 seconds — Repository and honest limitation
 
-Show the repository page or local repository reference. Say: “LocaleLens is available in the repository. This sample-mode demo is deterministic; hosted behavior and other unobserved environments remain outside what this recording proves.”
+Show the local repository reference. Say: “This local sample demo is deterministic; public links and hosted behavior require separate approval.”

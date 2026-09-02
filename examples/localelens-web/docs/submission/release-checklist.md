@@ -38,13 +38,10 @@ worktree.
 
 ## Runtime and command gate
 
-All Node commands used only
-`/Users/billytompazis/.nvm/versions/node/v22.22.2/bin` (`node v22.22.2`,
-`npm 10.9.7`) and ran with `SOLARI_API_KEY` unset plus
+All Node commands used the owner-required explicit Node binary (`node
+v22.22.2`, `npm 10.9.7`) and ran with `SOLARI_API_KEY` unset plus
 `NEXT_PUBLIC_APP_MODE=sample` and `LIVE_CAPTURE_ENABLED=false` explicit. Git
-checks used
-`/Users/billytompazis/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback/git`
-(`git version 2.53.0`).
+checks used the owner-required explicit fallback binary (`git version 2.53.0`).
 
 | Fresh command from `examples/localelens-web/` | Result |
 | --- | --- |
@@ -92,6 +89,11 @@ Distinct actual-size inspections remain recorded separately:
 - macOS Preview with Actual Size active: the name, headline, sample receipt,
   and US/GB/DE columns were readable and safely framed.
 
+The card also retains the source capture's Next development badge and browser
+scrollbar. Those development-chrome elements must be removed and the card
+regenerated before any separately authorized publication; this task does not
+alter the PNG.
+
 ## Privacy and content inspection
 
 Value-bearing scans reported counts and affected relative filenames only; no
@@ -132,9 +134,9 @@ as populated credentials.
 
 #### Blocking tracked/history local-path finding
 
-The current tree and Git history retain a privacy limitation: local provenance
-paths occur in eight documentation files. Seven `/Volumes/` references occur
-once each in:
+The terminal current tree retains a privacy limitation: 10 absolute local
+provenance lines occur across eight documentation files. Seven volume-root
+references occur once each in:
 
 - `docs/PHASE_2_START_PROMPT.md`
 - `docs/evidence/localelens-phase-0.md`
@@ -144,31 +146,39 @@ once each in:
 - `examples/localelens-web/docs/evidence/phase-4.md`
 - `examples/localelens-web/docs/evidence/security-review.md`
 
-Three `/Users/` references occur in `docs/START_PROMPT.md`. These strings are
+Three user-home references occur in `docs/START_PROMPT.md`. These strings are
 non-secret development provenance, not credentials, but they disclose local
-path context in the current public tree and immutable history. This task does
-not rewrite history. Owner review or a separately authorized remediation is
-required before treating the candidate as privacy-clean. The zero generic
-`TODO`/`FIXME`/`TBD` result above does not neutralize this distinct finding.
+path context in the current public tree and immutable history. Earlier
+checklist commits `61143f8dfc6998af57e59b65f49e64f7cd2b2295` and
+`e1adce46b8ee61e12668ecc4841856ac65c50dc7` also added absolute local
+runtime/Git path literals to immutable branch history. Any separately
+authorized public-history remediation must include those commits as well as
+the eight current-tree documents; this task does not rewrite history. Owner
+review or separately authorized remediation is required before treating the
+candidate as privacy-clean. The zero generic `TODO`/`FIXME`/`TBD` result above
+does not neutralize this distinct finding.
 
 ### Assets, ignored artifacts, and fresh build
 
 - All 16 tracked binary screenshots/assets were scanned for realistic provider
   values, server/public secret names, local paths, replay URLs, bearer-like
   values, and email-like literals: **0** findings.
-- The seven current submission/public assets (three submission documents and
-  four public images) had **0** realistic provider values, secret-variable
-  names, local paths, browser-storage references, draft markers, replay URLs,
-  bearer-like values, or email-like literals.
+- The seven pre-checklist submission/public assets (three submission documents
+  and four public images) had **0** findings across the scanned categories.
+  The release checklist is an eighth terminal artifact and intentionally names
+  secret-variable and local-path categories. Across all eight terminal
+  submission/public artifacts there are **0** realistic credential values and
+  **0** populated public-secret assignments; category-name mentions are not
+  claimed as zero.
 - Fresh production output excluding caches and old dev output had **0**
   realistic provider values, **0** populated/public secret names, **0** replay
   URLs, and **0** bearer-like values. Expected server-only variable names occur
   only in server chunks. `.next/static` contained **0** server-variable names,
   **0** public-secret names, **0** local paths, and **0** realistic provider
   values.
-- Fresh production metadata contains eight `/Volumes/` strings only in
-  `.next/required-server-files.js` and `.json`; these are ignored local build
-  metadata, not client assets or tracked public material.
+- Fresh production metadata contains eight volume-root absolute local-path
+  strings only in `.next/required-server-files.js` and `.json`; these are
+  ignored local build metadata, not client assets or tracked public material.
 - An older ignored `.next/dev` cache contains two realistic-pattern strings.
   They are absent from fresh production output and `.next/static`; because the
   cache is ignored and not staged, it is a local-artifact finding, not public
