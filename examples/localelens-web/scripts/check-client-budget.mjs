@@ -20,7 +20,7 @@ async function readJson(relativePath, label) {
   }
 }
 
-async function readClientReferenceManifest(relativePath) {
+async function readClientReferenceManifest(relativePath, appPath) {
   const absolutePath = resolve(BUILD_DIRECTORY, relativePath);
   let source;
 
@@ -33,7 +33,7 @@ async function readClientReferenceManifest(relativePath) {
   }
 
   const match = source.match(
-    /globalThis\.__RSC_MANIFEST\[[^\]]+\]\s*=\s*(\{[\s\S]*\});?\s*$/,
+    /globalThis\.__RSC_MANIFEST\[("(?:\\.|[^"\\])*")\]\s*=\s*(\{[\s\S]*\});?\s*$/,
   );
 
   if (!match) {
@@ -41,7 +41,13 @@ async function readClientReferenceManifest(relativePath) {
   }
 
   try {
-    return JSON.parse(match[1]);
+    if (JSON.parse(match[1]) !== appPath) {
+      fail(
+        `Main-route client reference manifest (${relativePath}) is assigned to a different route.`,
+      );
+    }
+
+    return JSON.parse(match[2]);
   } catch (error) {
     fail(
       `Cannot parse main-route client reference manifest (${relativePath}): ${error.message}`,
@@ -108,14 +114,31 @@ async function main() {
 
   const buildManifest = await readJson("build-manifest.json", "build manifest");
   const routeManifestPath = `server/app${appPath}_client-reference-manifest.js`;
-  const routeManifest = await readClientReferenceManifest(routeManifestPath);
+  const routeManifest = await readClientReferenceManifest(routeManifestPath, appPath);
+  const rootMainFiles = requireStringArray(
+    buildManifest.rootMainFiles,
+    "build manifest rootMainFiles",
+  );
+  const routeChunks = [
+    ...collectEntryChunks(routeManifest.entryJSFiles),
+    ...collectClientModuleChunks(routeManifest.clientModules),
+  ];
+  if (rootMainFiles.length === 0) {
+    fail("Build manifest rootMainFiles is empty.");
+  }
+  if (routeChunks.length === 0) {
+    fail("Main-route client reference manifest contains no client JavaScript chunks.");
+  }
   const chunks = new Set(
     [
-      ...requireStringArray(buildManifest.rootMainFiles, "build manifest rootMainFiles"),
-      ...collectEntryChunks(routeManifest.entryJSFiles),
-      ...collectClientModuleChunks(routeManifest.clientModules),
+      ...rootMainFiles,
+      ...routeChunks,
     ].map(chunkPath),
   );
+
+  if (chunks.size === 0) {
+    fail("Main-route client JavaScript chunk set is empty.");
+  }
 
   const rows = [];
   for (const chunk of [...chunks].sort()) {

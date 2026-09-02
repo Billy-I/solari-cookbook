@@ -13,6 +13,11 @@ import { toSafeCaptureFailure } from "@/src/features/capture/safe-error";
 
 const clientTimeoutMs = 45_000;
 const maximumUnresolvedTransports = 3;
+const isoDateSource =
+  "(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))";
+const isoOffsetDateTime = new RegExp(
+  `^${isoDateSource}T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$`,
+);
 
 class ResponseTooLargeError extends Error {}
 
@@ -165,6 +170,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return (
+    Object.keys(value).length === keys.length &&
+    keys.every((key) => Object.hasOwn(value, key))
+  );
+}
+
 function isString(value: unknown, maximumLength: number): value is string {
   return typeof value === "string" && value.length <= maximumLength;
 }
@@ -202,12 +214,18 @@ function isSupportedCountry(value: unknown): value is SupportedCountry {
   );
 }
 
+function isIsoOffsetDateTime(value: unknown): value is string {
+  return typeof value === "string" && isoOffsetDateTime.test(value);
+}
+
 function isCaptureResponse(body: unknown): body is CaptureResponse {
   if (!isRecord(body) || typeof body.ok !== "boolean") return false;
 
   if (!body.ok) {
     return (
+      hasExactKeys(body, ["ok", "error"]) &&
       isRecord(body.error) &&
+      hasExactKeys(body.error, ["code", "message", "retryable"]) &&
       typeof body.error.code === "string" &&
       SAFE_CAPTURE_ERROR_CODES.includes(
         body.error.code as (typeof SAFE_CAPTURE_ERROR_CODES)[number],
@@ -229,6 +247,30 @@ function isCaptureResponse(body: unknown): body is CaptureResponse {
   const httpStatus = evidence.httpStatus;
   const screenshotWidth = screenshot.width;
   return (
+    hasExactKeys(body, ["ok", "evidence", "receipt", "screenshot"]) &&
+    hasExactKeys(evidence, [
+      "requestedUrl",
+      "finalUrl",
+      "title",
+      "documentLanguage",
+      "primaryHeading",
+      "primaryAction",
+      "ctas",
+      "currencies",
+      "priceSnippets",
+      "consentText",
+      "httpStatus",
+      "capturedAt",
+    ]) &&
+    hasExactKeys(receipt, [
+      "country",
+      "proxyCountry",
+      "proxyTier",
+      "timezoneId",
+      "sessionId",
+      "recordingRequested",
+    ]) &&
+    hasExactKeys(screenshot, ["mediaType", "base64", "width"]) &&
     isHttpsUrl(evidence.requestedUrl) &&
     isHttpsUrl(evidence.finalUrl) &&
     isNullableString(evidence.title, 200) &&
@@ -244,8 +286,7 @@ function isCaptureResponse(body: unknown): body is CaptureResponse {
         Number.isInteger(httpStatus) &&
         httpStatus >= 100 &&
         httpStatus <= 599)) &&
-    isNonEmptyString(evidence.capturedAt, 64) &&
-    !Number.isNaN(Date.parse(evidence.capturedAt)) &&
+    isIsoOffsetDateTime(evidence.capturedAt) &&
     isSupportedCountry(receipt.country) &&
     isSupportedCountry(receipt.proxyCountry) &&
     receipt.proxyTier === "residential" &&

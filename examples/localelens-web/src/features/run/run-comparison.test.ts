@@ -13,7 +13,7 @@ const input: AuditFormValue = {
   countries: ["us", "gb", "de"],
 };
 
-function response(body: CaptureResponse, status = 200): Response {
+function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
     status,
@@ -34,6 +34,100 @@ afterEach(() => {
 });
 
 describe("runComparison", () => {
+  it.each([
+    ["a top-level success apiKey", { ...sampleCaptureByCountry.us, apiKey: "not-allowed" }],
+    [
+      "an evidence extra field",
+      {
+        ...sampleCaptureByCountry.us,
+        evidence: { ...sampleCaptureByCountry.us.evidence, extra: "not-allowed" },
+      },
+    ],
+    [
+      "a receipt extra field",
+      {
+        ...sampleCaptureByCountry.us,
+        receipt: { ...sampleCaptureByCountry.us.receipt, extra: "not-allowed" },
+      },
+    ],
+    [
+      "a screenshot extra field",
+      {
+        ...sampleCaptureByCountry.us,
+        screenshot: { ...sampleCaptureByCountry.us.screenshot, extra: "not-allowed" },
+      },
+    ],
+    [
+      "a top-level failure extra field",
+      {
+        ok: false,
+        error: {
+          code: "NAVIGATION_TIMEOUT",
+          message: "The target did not load within the capture limit.",
+          retryable: true,
+        },
+        extra: "not-allowed",
+      },
+    ],
+    [
+      "a failure error extra field",
+      {
+        ok: false,
+        error: {
+          code: "NAVIGATION_TIMEOUT",
+          message: "The target did not load within the capture limit.",
+          retryable: true,
+          extra: "not-allowed",
+        },
+      },
+    ],
+  ])("fails closed for %s", async (_case, body) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(body)));
+    const runEvents = events();
+
+    await runCountryCapture(
+      "us",
+      "https://regional.example.test/pricing",
+      runEvents,
+      new AbortController().signal,
+    );
+
+    expect(runEvents.succeeded).not.toHaveBeenCalled();
+    expect(runEvents.failed).toHaveBeenCalledWith(
+      "us",
+      expect.objectContaining({ code: "CAPTURE_FAILED", retryable: true }),
+    );
+  });
+
+  it("fails closed for a non-ISO-offset capture timestamp", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        response({
+          ...sampleCaptureByCountry.us,
+          evidence: {
+            ...sampleCaptureByCountry.us.evidence,
+            capturedAt: "1 September 2026",
+          },
+        }),
+      ),
+    );
+    const runEvents = events();
+
+    await runCountryCapture(
+      "us",
+      "https://regional.example.test/pricing",
+      runEvents,
+      new AbortController().signal,
+    );
+
+    expect(runEvents.succeeded).not.toHaveBeenCalled();
+    expect(runEvents.failed).toHaveBeenCalledWith(
+      "us",
+      expect.objectContaining({ code: "CAPTURE_FAILED", retryable: true }),
+    );
+  });
+
   it("fails closed when both receipt countries differ from the requested fan-out country", async () => {
     const mismatchedResponse: CaptureResponse = {
       ...sampleCaptureByCountry.gb,
