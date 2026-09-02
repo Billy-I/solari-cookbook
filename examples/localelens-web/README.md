@@ -5,7 +5,35 @@ growth teams, localization leads, and QA engineers. It captures bounded,
 reviewable evidence from one public HTTPS page through Solari regional browser
 sessions instead of treating an assumed proxy location as proof.
 
-## Phase 3 status
+## Phase 4 local status
+
+Phase 4 is locally complete with frozen evidence on exact predecessor
+`06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` and implementation head
+`818f32463b66faba049a57fa34e2e8b5d1219c3e`. The exact evidence-commit SHA is
+resolved and reported by Git after commit instead of being embedded
+self-referentially in the evidence. Owner acceptance remains pending.
+
+The final local gate passes 23 Vitest files / 234 tests, typecheck, lint, a
+sample-mode production build, the 151,504 B / 184,320 B main-route gzip budget,
+11/11 sample-only Playwright tests, the app-reachable API-method gate,
+realistic tracked/fresh-build secret scans, and the Git whitespace check. The
+sample runner observed zero capture/replay API requests and spent zero Solari
+credits.
+
+In-app Browser evidence covers the stable shell, featured success, invalid
+input, and running states at `360x800`, `768x1024`, and `1440x900`, plus the
+live partial/retry/replay/final states at `1440x900`. The bounded live run used
+exactly four Spotify Premium capture calls: three initial US/GB/DE calls and
+one explicit GB retry, with no automatic retry. Three initial replay lookups
+were pending; one manual re-check per country made all three ready. Replay URLs
+and session IDs are not recorded.
+
+Actual browser-chrome 200% zoom, Browser reduced motion, direct screen-reader
+or VoiceOver output, live-only state variants at the two smaller viewports,
+raw optional provider tier/receipt payloads, provider-console cleanup, and
+hosted/deployed behavior remain `NOT PROVEN`.
+
+## Phase 3 foundation
 
 Phase 3 retains the secure single-region capture and replay core from Phase 2
 and adds the bounded comparison journey:
@@ -101,6 +129,9 @@ npm test
 npm run typecheck
 npm run lint
 npm run build
+npm run check:budget
+npm run test:e2e
+npm run check:api-methods
 npm ls --depth=0
 ```
 
@@ -136,9 +167,10 @@ prove the raw optional provider tier field or a ready replay URL.
 
 ## Phase boundary
 
-Phase 3 is complete. Phase 4 hardening, an assistive-technology audit, push,
-pull request, deployment, release, and publication have not started and are
-not authorized here.
+Phase 3 is complete. Phase 4 is locally complete with qualified evidence
+frozen; owner acceptance is still pending. Phase 5, push, pull request,
+deployment, release, and publication have not started and are not authorized
+here.
 
 See the [execution index](../../docs/EXECUTION_INDEX.md), [approved product and
 system design](../../docs/superpowers/specs/2026-09-01-localelens-design.md),
@@ -147,4 +179,6 @@ plan](../../docs/superpowers/plans/2026-09-01-localelens-phase-2-secure-capture.
 [selected visual direction](../../docs/design/localelens-visual-direction.md),
 [Phase 1 evidence](../../docs/evidence/localelens-phase-1.md), [Phase 2
 evidence](docs/evidence/phase-2.md), and [Phase 3
-evidence](docs/evidence/phase-3.md).
+evidence](docs/evidence/phase-3.md), [Phase 4
+evidence](docs/evidence/phase-4.md), and [Phase 4 visual
+review](docs/evidence/visual-review.md).
