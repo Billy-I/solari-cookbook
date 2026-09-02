@@ -8,7 +8,7 @@ export default defineConfig({
   forbidOnly: isCi,
   retries: isCi ? 0 : 1,
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://127.0.0.1:34123",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
@@ -19,9 +19,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev -- --hostname 127.0.0.1 --port 3000",
+    command: "npm run dev -- --hostname 127.0.0.1 --port 34123",
     env: { NEXT_PUBLIC_APP_MODE: "sample" },
-    port: 3000,
-    reuseExistingServer: !isCi,
+    port: 34123,
+    reuseExistingServer: false,
   },
 });

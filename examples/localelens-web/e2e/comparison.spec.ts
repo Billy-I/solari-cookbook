@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const targetUrl = "https://regional.example.test/pricing";
+const firstTargetUrl = "https://example.com/";
+const secondTargetUrl = "https://www.iana.org/";
 
 function observeConsoleErrors(page: Page) {
   const errors: string[] = [];
@@ -21,7 +22,7 @@ function observeProviderRoutes(page: Page) {
   return providerRequests;
 }
 
-test("sample comparison settles three markets without provider requests", async ({ page }) => {
+test("desktop sample comparisons reset featured evidence and avoid provider requests", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const consoleErrors = observeConsoleErrors(page);
   const providerRequests = observeProviderRoutes(page);
@@ -36,11 +37,19 @@ test("sample comparison settles three markets without provider requests", async 
     page.getByLabel("Run evidence").getByText("Sample evidence", { exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("textbox", { name: "URL (HTTPS)" }).fill(targetUrl);
+  const status = page.getByRole("status", { name: "Comparison status" });
+
+  await page.getByRole("textbox", { name: "URL (HTTPS)" }).fill(firstTargetUrl);
+  await expect(page.getByRole("textbox", { name: "URL (HTTPS)" })).toHaveValue(
+    firstTargetUrl,
+  );
   await page.getByRole("checkbox", { name: "Germany" }).check();
   await page.getByRole("button", { name: "Compare markets" }).click();
 
-  const status = page.getByRole("status", { name: "Comparison status" });
+  await expect(status).toContainText("Queued");
+  await expect(
+    page.getByLabel("Run evidence").getByText("example.com", { exact: true }),
+  ).toBeVisible();
   for (const market of ["US", "GB", "DE"]) {
     await expect(status.getByText(market, { exact: true })).toBeVisible();
   }
@@ -60,7 +69,15 @@ test("sample comparison settles three markets without provider requests", async 
   await page.getByRole("button", { name: "Print evidence" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-print-opened", "true");
 
+  await page.getByRole("textbox", { name: "URL (HTTPS)" }).fill(secondTargetUrl);
+  await expect(page.getByRole("textbox", { name: "URL (HTTPS)" })).toHaveValue(
+    secondTargetUrl,
+  );
   await page.getByRole("button", { name: "Compare markets" }).click();
+  await expect(status).toContainText("Queued");
+  await expect(
+    page.getByLabel("Run evidence").getByText("www.iana.org", { exact: true }),
+  ).toBeVisible();
   await expect(status.getByText("Complete", { exact: true })).toHaveCount(3);
   expect(
     await page.locator("html").evaluate(
