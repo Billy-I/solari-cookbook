@@ -47,21 +47,24 @@ and an explicit replay lookup. No automatic capture retry occurs.
 
 ```mermaid
 flowchart LR
-  U[Reviewer browser] -->|sample mode| F[Deterministic fixtures]
-  U -->|owner-controlled live mode| R[POST one country]
-  R --> V[HTTPS and network validation]
-  V --> S[Solari recorded regional browser]
-  S --> E[Bounded screenshot and evidence]
-  E --> U
-  U --> D[Pure deterministic comparison]
-  D --> X[JSON and print export]
-  S -. session id .-> P[Replay lookup]
+    U[User] --> F[Next.js client page]
+    F -->|one POST per country| R[Capture route]
+    R --> V[HTTPS and country validation]
+    V --> S[Solari cloud browser]
+    S --> P[Public target page]
+    P --> E[Deterministic evidence extractor]
+    E --> C[Capture result]
+    C --> F
+    F --> D[Local comparison and exports]
+    R -->|after close| Q[Replay lookup route]
+    Q --> F
 ```
 
-Each live country request is separately validated, captured, and closed. The
-client merges results in stable country order; replay lookup is a separate,
-explicit action. There is no account system, database, queue, background
-worker, analytics pipeline, or model provider.
+In sample mode, the client uses deterministic fixtures without calling either
+route. Owner-controlled local live mode follows the diagram: each selected
+country is an independent request, and the capture route closes before replay
+lookup. There is no account system, database, queue, background worker,
+analytics pipeline, or model provider.
 
 ## Local setup
 
@@ -69,7 +72,8 @@ From the cookbook root, use Node `v22.22.2`:
 
 ```bash
 cd examples/localelens-web
-nvm use
+nvm install 22.22.2
+nvm use 22.22.2
 node --version
 npm install
 npm run dev
