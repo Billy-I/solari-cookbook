@@ -100,8 +100,10 @@ as populated credentials.
 
 ### Tracked tree, history, and full public diff
 
-- Current tracked worktree: 152 files inspected (136 text, 16 binary),
+- Pre-checklist candidate inventory: 152 tracked files inspected (136 text, 16 binary),
   6,477,383 bytes.
+- Terminal inventory after the checklist commit: 153 tracked files. Fix round
+  1 changes this checklist in place and adds no tracked path.
 - Every one of the 57 branch commit patches was inspected (134,866 lines,
   8,150,859 bytes), as was the complete combined public diff.
 - Realistic `slr_(live|test)_...` values: **0** in the tracked tree, candidate
@@ -128,6 +130,8 @@ as populated credentials.
   files; only three occur in the added public diff and all three are test
   fixtures. No email-like literal occurs in submission/public assets.
 
+#### Blocking tracked/history local-path finding
+
 The current tree and Git history retain a privacy limitation: local provenance
 paths occur in eight documentation files. Seven `/Volumes/` references occur
 once each in:
@@ -144,7 +148,8 @@ Three `/Users/` references occur in `docs/START_PROMPT.md`. These strings are
 non-secret development provenance, not credentials, but they disclose local
 path context in the current public tree and immutable history. This task does
 not rewrite history. Owner review or a separately authorized remediation is
-required before treating the candidate as privacy-clean.
+required before treating the candidate as privacy-clean. The zero generic
+`TODO`/`FIXME`/`TBD` result above does not neutralize this distinct finding.
 
 ### Assets, ignored artifacts, and fresh build
 
@@ -172,8 +177,10 @@ required before treating the candidate as privacy-clean.
   and `tsconfig.tsbuildinfo`. The ignored SDD evidence contains expected local
   paths and server-variable names; dependencies and build output remain
   outside Git.
-- Untracked `test-results/.last-run.json` contains no scanned sensitive pattern
-  and remains unstaged.
+- Playwright generated an untracked `test-results/.last-run.json` during this
+  verification run. Its one 45-byte file had no scanned sensitive pattern. Fix
+  round 1 deleted that explicitly named file and removed the now-empty literal
+  directory; neither was staged or committed.
 
 ### Links, claims, and approvals
 
@@ -194,19 +201,19 @@ class.
 
 ## Worktree and protected files
 
-The pre-existing modified `next-env.d.ts` and protected untracked
-`AGENTS.md`/`CLAUDE.md` were not edited or staged. Their Task 3 baseline hashes
-are:
+The protected untracked `AGENTS.md` and `CLAUDE.md` were not edited or staged.
+`next-env.d.ts` was clean at Task 3 preflight, then Next development output
+changed its generated type imports during verification. Fix round 1 restored
+it exactly to the committed blob; it was not staged. Terminal hashes are:
 
 | Relative file | SHA-256 |
 | --- | --- |
 | `examples/localelens-web/AGENTS.md` | `63f2c50380ed6303237cce215ce27af1d620d094c215e28d1b1538a3c070e3bb` |
 | `examples/localelens-web/CLAUDE.md` | `336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49` |
-| `examples/localelens-web/next-env.d.ts` working copy | `0f70629890b72a0a82e91972cc032c04b658b26c265373cb711cf576bfbf8fcc` |
+| `examples/localelens-web/next-env.d.ts` restored working copy | `1862ac4bbbc5192d4bf562161df66ea547ed3e67173100656ab606ae9797db2b` |
 
-The committed candidate blob for `next-env.d.ts` has SHA-256
-`1862ac4bbbc5192d4bf562161df66ea547ed3e67173100656ab606ae9797db2b`;
-the difference is preserved as pre-existing user/generated work.
+The committed candidate blob for `next-env.d.ts` has the same SHA-256. The
+verification-generated working-copy difference is absent at terminal status.
 
 ## Evidence boundaries and known limitations
 
