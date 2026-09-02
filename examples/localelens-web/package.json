@@ -11,6 +11,8 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:sample": "npm run test:e2e",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
@@ -23,6 +25,8 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "4.3.3",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
