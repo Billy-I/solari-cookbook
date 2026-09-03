@@ -1,124 +1,121 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import Page from "@/app/page";
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json" },
+    status,
+  });
+}
+
 afterEach(() => {
-  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
 describe("LocaleLens comparison page", () => {
-  it("presents the complete comparison-page structure", () => {
-    vi.stubEnv("NEXT_PUBLIC_APP_MODE", "sample");
+  it("starts with the connection gate and no sample or evidence surfaces", async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({ status: "missing" }));
+    vi.stubGlobal("fetch", fetch);
     render(<Page />);
 
+    expect(screen.getByRole("heading", { name: "Solari connection" })).toBeVisible();
     expect(
-      screen.getByRole("heading", {
-        name: "Compare the experience by market",
-      }),
+      screen.getByRole("heading", { name: "Compare the experience by market" }),
     ).toBeVisible();
-    expect(
-      screen.getByRole("region", { name: "Run comparison" }),
-    ).toBeVisible();
-    expect(
-      screen.getByRole("region", { name: "Run evidence" }),
-    ).toBeVisible();
-    expect(
-      screen.getByRole("region", { name: "Regional results" }),
-    ).toBeVisible();
-    fireEvent.click(screen.getByText("Screenshots and regional evidence"));
-    expect(
-      screen.getAllByRole("article", { name: /regional evidence/i }),
-    ).toHaveLength(3);
-    expect(
-      within(screen.getByRole("region", { name: "Run evidence" })).getByText(
-        "Featured sample",
-        { exact: true },
-      ),
-    ).toBeVisible();
-    expect(
-      screen.getByText("Evidence appears as each regional capture settles."),
-    ).toBeVisible();
-    expect(screen.getByText("Replay availability is temporary.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Download JSON" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Print evidence" })).toBeDisabled();
-    expect(
-      screen.getByText("Run the featured demo to create an exportable receipt."),
-    ).toBeVisible();
-    expect(
-      screen.queryByText("Replay unavailable in Phase 1"),
-    ).not.toBeInTheDocument();
-  });
-
-  it("separates the featured sample preview from the next run controls", () => {
-    vi.stubEnv("NEXT_PUBLIC_APP_MODE", "sample");
-    render(<Page />);
-
-    const runEvidence = screen.getByRole("region", { name: "Run evidence" });
-    expect(
-      within(runEvidence).getByText("Featured sample", { exact: true }),
-    ).toBeVisible();
-    expect(
-      within(runEvidence).getByText("Preview", { exact: true }),
-    ).toBeVisible();
-    expect(screen.getByText("Demo data — this URL will not be visited.")).toBeVisible();
-    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run featured demo" })).toBeVisible();
-  });
-
-  it("labels featured fixtures as a preview until a live run starts", () => {
-    vi.stubEnv("NEXT_PUBLIC_APP_MODE", "live");
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
-    render(<Page />);
-
-    expect(screen.getByText("Live through Solari.")).toBeVisible();
-    expect(screen.getAllByRole("checkbox")).toHaveLength(15);
-    expect(
-      screen.getByText("Run a live comparison to create an exportable receipt."),
-    ).toBeVisible();
-    expect(
-      screen.queryByText("Run the featured demo to create an exportable receipt."),
-    ).not.toBeInTheDocument();
-
-    expect(
-      within(screen.getByRole("region", { name: "Run evidence" })).getByText(
-        "Featured sample",
-        { exact: true },
-      ),
-    ).toBeVisible();
-    expect(
-      screen.queryByText("Live Solari capture", { exact: true }),
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Compare live through Solari" }),
+    await waitFor(() =>
+      expect(screen.getByLabelText("Solari API key")).toBeEnabled(),
     );
-
-    expect(screen.getByText("Live Solari capture", { exact: true })).toBeVisible();
-    expect(screen.getByText("Run ID", { exact: true })).toBeVisible();
-    expect(screen.getByText(/^llr_[0-9a-f-]{36}$/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Use my Solari key" })).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Cancel comparison" }),
+      screen.getByRole("button", { name: "Compare live through Solari" }),
+    ).toBeDisabled();
+    expect(screen.queryByRole("region", { name: "Run evidence" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Regional results" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/sample|demo/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("regional.example.test")).not.toBeInTheDocument();
+    expect(screen.queryByText(/mode/i)).not.toBeInTheDocument();
+  });
+
+  it("does not authenticate or capture when a key is only typed or pasted", async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({ status: "missing" }));
+    vi.stubGlobal("fetch", fetch);
+    render(<Page />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByLabelText("Solari API key"), {
+      target: { value: "synthetic-browser-key-canary" },
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("region", { name: "Run evidence" })).not.toBeInTheDocument();
+  });
+
+  it("enables comparison only after a ready session", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ status: "ready" })),
+    );
+    render(<Page />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Ready for this session")).toBeVisible(),
+    );
+    expect(
+      screen.getByRole("button", { name: "Compare live through Solari" }),
     ).toBeEnabled();
-    expect(
-      screen.queryByText("Featured sample", { exact: true }),
-    ).not.toBeInTheDocument();
-    expect(screen.getAllByText("Launching browser")).toHaveLength(4);
-    expect(
-      screen.queryByRole("article", { name: "United States regional evidence" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("article", { name: "United Kingdom regional evidence" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Download JSON" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Print evidence" })).toBeDisabled();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel comparison" }));
-    expect(screen.getAllByText("Cancelled")).toHaveLength(2);
-    expect(
-      screen.queryByRole("button", { name: "Cancel comparison" }),
-    ).not.toBeInTheDocument();
+  it("keeps invalid authentication out of the evidence UI", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ status: "missing" }))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          { status: "authentication_failed", message: "unsafe provider body" },
+          401,
+        ),
+      );
+    vi.stubGlobal("fetch", fetch);
+    render(<Page />);
+    await waitFor(() => screen.getByRole("button", { name: "Use my Solari key" }));
+    fireEvent.change(screen.getByLabelText("Solari API key"), {
+      target: { value: "synthetic-browser-key-canary" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use my Solari key" }));
+
+    await waitFor(() => expect(screen.getByText("Authentication failed")).toBeVisible());
+    expect(screen.queryByText("unsafe provider body")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Run evidence" })).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("invalidates the visible connection after a SOLARI_AUTH capture failure", async () => {
+    const authFailure = {
+      ok: false,
+      correlation: null,
+      error: {
+        code: "SOLARI_AUTH",
+        message: "Solari authentication is required.",
+        retryable: false,
+      },
+    };
+    const fetch = vi.fn((input: RequestInfo | URL) => {
+      if (String(input) === "/api/solari-session") {
+        return Promise.resolve(jsonResponse({ status: "ready" }));
+      }
+      return Promise.resolve(jsonResponse(authFailure, 401));
+    });
+    vi.stubGlobal("fetch", fetch);
+    render(<Page />);
+    await waitFor(() => expect(screen.getByText("Ready for this session")).toBeVisible());
+    fireEvent.change(screen.getByRole("textbox", { name: "URL (HTTPS)" }), {
+      target: { value: "https://public.example.test/" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Compare live through Solari" }));
+
+    await waitFor(() => expect(screen.getByText("Authentication failed")).toBeVisible());
+    expect(screen.getByRole("region", { name: "Run evidence" })).toBeVisible();
   });
 });

@@ -9,11 +9,9 @@ import {
 } from "@/src/features/capture/countries";
 import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 
-const featuredCountries: SupportedCountry[] = ["us", "gb", "de"];
 const defaultCountries: SupportedCountry[] = SUPPORTED_COUNTRIES.filter(
   (country) => country === "us" || country === "gb",
 );
-const featuredUrl = "https://regional.example.test/pricing";
 
 export type AuditFormValue = {
   url: string;
@@ -22,7 +20,8 @@ export type AuditFormValue = {
 
 type AuditFormProps = {
   busy?: boolean;
-  mode: "sample" | "live";
+  connectionReady: boolean;
+  onNeedsConnection: () => void;
   onSubmit: (value: AuditFormValue) => void;
 };
 
@@ -34,8 +33,13 @@ function isHttpsUrl(value: string): boolean {
   }
 }
 
-export function AuditForm({ busy = false, mode, onSubmit }: AuditFormProps) {
-  const [url, setUrl] = useState(featuredUrl);
+export function AuditForm({
+  busy = false,
+  connectionReady,
+  onNeedsConnection,
+  onSubmit,
+}: AuditFormProps) {
+  const [url, setUrl] = useState("");
   const [countries, setCountries] =
     useState<SupportedCountry[]>(defaultCountries);
   const [error, setError] = useState<string | null>(null);
@@ -69,9 +73,8 @@ export function AuditForm({ busy = false, mode, onSubmit }: AuditFormProps) {
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-
-    if (mode === "sample") {
-      onSubmit({ url: featuredUrl, countries: [...featuredCountries] });
+    if (!connectionReady) {
+      onNeedsConnection();
       return;
     }
 
@@ -83,37 +86,7 @@ export function AuditForm({ busy = false, mode, onSubmit }: AuditFormProps) {
     }
 
     setError(null);
-      onSubmit({ url: normalizedUrl, countries });
-  }
-
-  if (mode === "sample") {
-    return (
-      <form
-        aria-label="Run featured demo"
-        className="control-grid sample-control"
-        onSubmit={submit}
-      >
-        <p className="mode-notice">Demo data — this URL will not be visited.</p>
-        <dl className="sample-definition">
-          <div>
-            <dt>Featured target</dt>
-            <dd>regional.example.test</dd>
-          </div>
-          <div>
-            <dt>Featured markets</dt>
-            <dd>United States, United Kingdom, and Germany</dd>
-          </div>
-        </dl>
-        <button
-          aria-disabled={busy || undefined}
-          aria-label="Run featured demo"
-          className="primary-action"
-          type="submit"
-        >
-          {busy ? "Running featured demo…" : "Run featured demo"}
-        </button>
-      </form>
-    );
+    onSubmit({ url: normalizedUrl, countries });
   }
 
   return (
@@ -164,9 +137,11 @@ export function AuditForm({ busy = false, mode, onSubmit }: AuditFormProps) {
       </fieldset>
 
       <button
-        aria-disabled={busy || undefined}
+        aria-describedby="solari-connection-guidance"
+        aria-disabled={busy || !connectionReady || undefined}
         aria-label="Compare live through Solari"
         className="primary-action"
+        disabled={!connectionReady}
         type="submit"
       >
         {busy ? "Comparing live…" : "Compare live through Solari"}

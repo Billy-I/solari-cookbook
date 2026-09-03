@@ -143,31 +143,64 @@ select {
   margin: 0;
 }
 
-.sample-control {
-  grid-template-columns: minmax(0, 1fr) auto;
+.connection-section {
+  border: 1px solid var(--rule);
+  margin-bottom: 20px;
+  padding: 16px;
 }
 
-.sample-definition {
+.connection-heading,
+.connection-ready {
+  align-items: center;
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px 32px;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.connection-heading h2 {
+  font-size: 1rem;
   margin: 0;
 }
 
-.sample-definition div {
-  display: grid;
-  gap: 4px;
-}
-
-.sample-definition dt {
-  color: var(--muted);
-  font-size: 0.75rem;
+.connection-heading a {
+  align-items: center;
+  color: var(--text);
+  display: inline-flex;
+  font-size: 0.875rem;
   font-weight: 700;
-  text-transform: uppercase;
+  min-height: 44px;
 }
 
-.sample-definition dd {
+.connection-guidance {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.8125rem;
+  gap: 4px;
+  line-height: 1.5;
+  margin: 12px 0 16px;
+}
+
+.connection-guidance p,
+.connection-state {
   margin: 0;
+}
+
+.connection-form {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 1fr) auto;
+}
+
+.connection-state {
+  color: var(--muted);
+  font-size: 0.875rem;
+  grid-column: 1 / -1;
+}
+
+.connection-state-authentication_failed,
+.connection-state-authentication_unavailable {
+  color: #7e2418;
 }
 
 .field {
@@ -885,9 +918,16 @@ select {
   }
 
   .control-grid,
+  .connection-form,
   .receipt-row,
   .region-grid {
     grid-template-columns: 1fr;
+  }
+
+  .connection-heading,
+  .connection-ready {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .field-url,
