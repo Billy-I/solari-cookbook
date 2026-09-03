@@ -16,13 +16,21 @@ const expectedBody = JSON.stringify({
 const routes = [
   {
     allow: "POST, OPTIONS",
+    optionsCacheControl: "no-store",
     methods: ["GET", "HEAD", "PUT", "PATCH", "DELETE", "PROPFIND", "MKCOL"],
     path: "/api/captures",
   },
   {
-    allow: "GET, HEAD, OPTIONS",
-    methods: ["POST", "PUT", "PATCH", "DELETE", "PROPFIND", "MKCOL"],
+    allow: "GET, OPTIONS",
+    optionsCacheControl: "no-store",
+    methods: ["HEAD", "POST", "PUT", "PATCH", "DELETE", "PROPFIND", "MKCOL"],
     path: "/api/replays/valid-session-id",
+  },
+  {
+    allow: "GET, POST, DELETE, OPTIONS",
+    optionsCacheControl: "private, no-store",
+    methods: ["HEAD", "PUT", "PATCH", "PROPFIND", "MKCOL"],
+    path: "/api/solari-session",
   },
 ];
 
@@ -126,7 +134,7 @@ async function main() {
   const port = await reservePort();
   const environment = {
     ...process.env,
-    LIVE_CAPTURE_ENABLED: "false",
+    SOLARI_CAPTURE_DISABLED: "true",
   };
   delete environment.SOLARI_API_KEY;
   const child = spawn(
@@ -149,22 +157,32 @@ async function main() {
       headers: {
         "Content-Length": Buffer.byteLength(captureRequest),
         "Content-Type": "application/json",
+        Origin: `http://${host}:${port}`,
+        "Sec-Fetch-Site": "same-origin",
+        "x-localelens-request": "1",
       },
     });
     const replay = await request(
       port,
       "/api/replays/valid-session-id",
       "GET",
+      { headers: { "x-localelens-request": "1" } },
     );
-    const replayHead = await request(
+    const lifecycle = await request(
       port,
-      "/api/replays/valid-session-id",
-      "HEAD",
+      "/api/solari-session",
+      "GET",
+      { headers: { "x-localelens-request": "1" } },
     );
     const captureOptions = await request(port, "/api/captures", "OPTIONS");
     const replayOptions = await request(
       port,
       "/api/replays/valid-session-id",
+      "OPTIONS",
+    );
+    const lifecycleOptions = await request(
+      port,
+      "/api/solari-session",
       "OPTIONS",
     );
     const page = await request(port, "/", "GET");
@@ -200,28 +218,24 @@ async function main() {
       );
     }
     if (
-      replayHead.status !== replay.status ||
-      replayHead.headers["cache-control"] !== replay.headers["cache-control"] ||
-      replayHead.headers["content-type"] !== replay.headers["content-type"] ||
-      replayHead.headers.allow !== replay.headers.allow ||
-      replayHead.headers["access-control-allow-origin"] !== undefined ||
-      replayHead.body !== ""
+      lifecycle.status !== 200 ||
+      lifecycle.headers["cache-control"] !== "private, no-store" ||
+      lifecycle.body !== JSON.stringify({ status: "missing" })
     ) {
-      failures.push("Allowed replay HEAD did not preserve GET failure semantics.");
+      failures.push("Credential status route was not safely reachable without a key.");
     } else {
-      console.log(
-        "HEAD /api/replays/valid-session-id: PASS (bodyless GET semantics)",
-      );
+      console.log("GET /api/solari-session: PASS (missing, no-store)");
     }
     for (const [route, response] of [
       [routes[0], captureOptions],
       [routes[1], replayOptions],
+      [routes[2], lifecycleOptions],
     ]) {
       if (
         response.status !== 204 ||
         response.body !== "" ||
         response.headers.allow !== route.allow ||
-        response.headers["cache-control"] !== "no-store" ||
+        response.headers["cache-control"] !== route.optionsCacheControl ||
         response.headers["access-control-allow-origin"] !== undefined
       ) {
         failures.push(`OPTIONS ${route.path} did not preserve route semantics.`);

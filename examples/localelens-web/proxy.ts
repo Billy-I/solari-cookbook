@@ -1,13 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const captureMethods = ["POST", "OPTIONS"];
-const replayMethods = ["GET", "HEAD", "OPTIONS"];
+const methodsByPath = {
+  "/api/captures": ["POST", "OPTIONS"],
+  "/api/solari-session": ["GET", "POST", "DELETE", "OPTIONS"],
+} as const;
+const replayMethods = ["GET", "OPTIONS"] as const;
 
 export function proxy(request: NextRequest): Response {
-  const isCaptureRoute = request.nextUrl.pathname === "/api/captures";
-  const allowedMethods = isCaptureRoute ? captureMethods : replayMethods;
+  const allowedMethods =
+    methodsByPath[request.nextUrl.pathname as keyof typeof methodsByPath] ??
+    replayMethods;
 
-  if (allowedMethods.includes(request.method)) {
+  if (allowedMethods.some((method) => method === request.method)) {
     return NextResponse.next();
   }
 
@@ -29,5 +33,9 @@ export function proxy(request: NextRequest): Response {
 }
 
 export const config = {
-  matcher: ["/api/captures", "/api/replays/:path*"],
+  matcher: [
+    "/api/captures",
+    "/api/replays/:path*",
+    "/api/solari-session",
+  ],
 };
