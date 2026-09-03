@@ -1,3 +1,5 @@
+import { NextRequest, NextResponse } from "next/server";
+
 import { captureRegion } from "@/src/features/capture/capture-region";
 import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 import {
@@ -7,7 +9,19 @@ import {
   type SafeCaptureErrorCode,
 } from "@/src/features/capture/contracts";
 import { toSafeCaptureFailure } from "@/src/features/capture/safe-error";
-import { registerRunSession } from "@/src/features/capture/run-session-registry";
+import {
+  deleteRunSessionsForOwner,
+  registerRunSession,
+} from "@/src/features/capture/run-session-registry";
+import { credentialSessionStore } from "@/src/features/credential/credential-session-store";
+import {
+  clearSessionCookie,
+  readSessionToken,
+} from "@/src/features/credential/session-cookie";
+import {
+  assertAppRequest,
+  isSecureApplicationRequest,
+} from "@/src/features/credential/request-security";
 import { createSolariClient } from "@/src/lib/solari";
 import { logServerEvent } from "@/src/lib/server-observability";
 
@@ -55,8 +69,8 @@ async function readBoundedBody(request: Request): Promise<string> {
   }
 }
 
-function json(body: unknown, status: number): Response {
-  return Response.json(body, { status, headers: noStoreHeaders });
+function json(body: unknown, status: number): NextResponse {
+  return NextResponse.json(body, { status, headers: noStoreHeaders });
 }
 
 function failure(code: SafeCaptureErrorCode, status: number): Response {
@@ -98,13 +112,29 @@ function failureStatus(code: CaptureFailure["error"]["code"]): number {
   }
 }
 
-export async function POST(request: Request): Promise<Response> {
-  if (process.env.LIVE_CAPTURE_ENABLED !== "true") {
-    return failure("CAPTURE_FAILED", 403);
+function invalidateCredential(
+  request: NextRequest,
+  ownerId: string,
+  response: NextResponse,
+): void {
+  const token = readSessionToken(request);
+  if (token) credentialSessionStore.delete(token);
+  deleteRunSessionsForOwner(ownerId);
+  clearSessionCookie(response, isSecureApplicationRequest(request));
+}
+
+export async function POST(request: NextRequest): Promise<Response> {
+  try {
+    assertAppRequest(request, { requireJson: true, requireOrigin: true });
+  } catch {
+    return failure("INVALID_INPUT", 400);
+  }
+  if (!isSecureApplicationRequest(request)) {
+    return failure("INVALID_INPUT", 400);
   }
 
-  if (!process.env.SOLARI_API_KEY?.trim()) {
-    return failure("SOLARI_AUTH", 503);
+  if (process.env.SOLARI_CAPTURE_DISABLED === "true") {
+    return failure("CAPTURE_FAILED", 403);
   }
 
   let rawBody: string;
@@ -140,15 +170,22 @@ export async function POST(request: Request): Promise<Response> {
     return failure(code, 400);
   }
 
+  const token = readSessionToken(request);
+  const credential = token ? credentialSessionStore.resolve(token) : null;
+  if (!credential) return failure("SOLARI_AUTH", 503);
+
   try {
     const requestId = crypto.randomUUID();
     const result = await captureRegion(parsedRequest.data, {
-      createClient: createSolariClient,
+      createClient: () => createSolariClient(credential.apiKey),
       now: () => new Date(),
       requestId,
       log: (event) => logServerEvent(event),
       registerSession(input) {
-        const correlation = registerRunSession(input);
+        const correlation = registerRunSession({
+          ownerId: credential.ownerId,
+          ...input,
+        });
         logServerEvent({
           category: "session_registered",
           requestId,
@@ -157,9 +194,20 @@ export async function POST(request: Request): Promise<Response> {
         return correlation;
       },
     });
-    return json(result, result.ok ? 200 : failureStatus(result.error.code));
+    const response = json(
+      result,
+      result.ok ? 200 : failureStatus(result.error.code),
+    );
+    if (!result.ok && result.error.code === "SOLARI_AUTH") {
+      invalidateCredential(request, credential.ownerId, response);
+    }
+    return response;
   } catch (error) {
     const result = toSafeCaptureFailure(error);
-    return json(result, failureStatus(result.error.code));
+    const response = json(result, failureStatus(result.error.code));
+    if (result.error.code === "SOLARI_AUTH") {
+      invalidateCredential(request, credential.ownerId, response);
+    }
+    return response;
   }
 }

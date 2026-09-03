@@ -1,11 +1,15 @@
+import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   client,
   createSolariClient,
+  deleteRunSessionsForOwner,
   getReplayUrl,
   logServerEvent,
   lookupRunSession,
+  sessionsDelete,
+  sessionsResolve,
 } = vi.hoisted(() => {
   const getReplayUrl = vi.fn();
   const client = {
@@ -15,24 +19,33 @@ const {
   return {
     client,
     createSolariClient: vi.fn(() => client),
+    deleteRunSessionsForOwner: vi.fn(),
     getReplayUrl,
     logServerEvent: vi.fn(),
     lookupRunSession: vi.fn(),
+    sessionsDelete: vi.fn(),
+    sessionsResolve: vi.fn(),
   };
 });
 
 vi.mock("@/src/lib/solari", () => ({ createSolariClient }));
 vi.mock("@/src/lib/server-observability", () => ({ logServerEvent }));
 vi.mock("@/src/features/capture/run-session-registry", () => ({
+  deleteRunSessionsForOwner,
   lookupRunSession,
+}));
+vi.mock("@/src/features/credential/credential-session-store", () => ({
+  credentialSessionStore: {
+    delete: sessionsDelete,
+    resolve: sessionsResolve,
+  },
 }));
 
 import * as replayRoute from "@/app/api/replays/[id]/route";
 
 const { GET } = replayRoute;
 
-const originalLiveCaptureEnabled = process.env.LIVE_CAPTURE_ENABLED;
-const originalApiKey = process.env.SOLARI_API_KEY;
+const ownerId = "a".repeat(64);
 const rawSessionId =
   "pool-7f3a:9d1c4e2a-55b1-4a7e-9a3f-2c8d1e6b0a44:org_4b91ac2f:1752652800000.signature_abc";
 const runId = "llr_123e4567-e89b-42d3-a456-426614174000";
@@ -40,14 +53,22 @@ const sessionRef = "sol_dab46ee6c619545d0534";
 
 function replayRequest(
   overrides: Partial<Record<"runId" | "country" | "attempt", string>> = {},
-): Request {
+  headers: Record<string, string> = {},
+): NextRequest {
   const query = new URLSearchParams({
     runId,
     country: "us",
     attempt: "1",
     ...overrides,
   });
-  return new Request(`http://localhost/api/replays/${sessionRef}?${query}`);
+  return new NextRequest(`http://localhost/api/replays/${sessionRef}?${query}`, {
+    headers: {
+      Cookie: "localelens_session=opaque-token",
+      "Sec-Fetch-Site": "same-origin",
+      "x-localelens-request": "1",
+      ...headers,
+    },
+  });
 }
 
 function routeContext(id: string) {
@@ -60,6 +81,10 @@ async function expectNoStore(response: Response): Promise<unknown> {
 }
 
 beforeEach(() => {
+  sessionsResolve.mockReturnValue({
+    ownerId,
+    apiKey: "synthetic-user-capture-canary",
+  });
   lookupRunSession.mockReturnValue(rawSessionId);
 });
 
@@ -70,22 +95,15 @@ afterEach(() => {
   client.close.mockResolvedValue(undefined);
   logServerEvent.mockReset();
   lookupRunSession.mockReset();
-
-  if (originalLiveCaptureEnabled === undefined) {
-    delete process.env.LIVE_CAPTURE_ENABLED;
-  } else {
-    process.env.LIVE_CAPTURE_ENABLED = originalLiveCaptureEnabled;
-  }
-
-  if (originalApiKey === undefined) {
-    delete process.env.SOLARI_API_KEY;
-  } else {
-    process.env.SOLARI_API_KEY = originalApiKey;
-  }
+  deleteRunSessionsForOwner.mockReset();
+  sessionsDelete.mockReset();
+  sessionsResolve.mockReset();
+  delete process.env.SOLARI_CAPTURE_DISABLED;
+  delete process.env.SOLARI_API_KEY;
 });
 
 describe("GET /api/replays/:id", () => {
-  it.each(["POST", "PUT", "PATCH", "DELETE"] as const)(
+  it.each(["HEAD", "POST", "PUT", "PATCH", "DELETE"] as const)(
     "returns a no-store 405 for unsupported %s requests",
     async (method) => {
       const handler = Reflect.get(replayRoute, method) as
@@ -103,7 +121,7 @@ describe("GET /api/replays/:id", () => {
 
       expect(response.status).toBe(405);
       expect(response.headers.get("Cache-Control")).toBe("no-store");
-      expect(response.headers.get("Allow")).toBe("GET, HEAD, OPTIONS");
+      expect(response.headers.get("Allow")).toBe("GET, OPTIONS");
       expect(await response.text()).toBe("");
     },
   );
@@ -120,12 +138,11 @@ describe("GET /api/replays/:id", () => {
 
     expect(response.status).toBe(204);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(response.headers.get("Allow")).toBe("GET, HEAD, OPTIONS");
+    expect(response.headers.get("Allow")).toBe("GET, OPTIONS");
   });
 
-  it("fails closed when live capture is disabled", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "false";
-    process.env.SOLARI_API_KEY = "unit-test-key";
+  it("fails closed when capture is explicitly disabled", async () => {
+    process.env.SOLARI_CAPTURE_DISABLED = "true";
 
     const response = await GET(replayRequest(), routeContext(sessionRef));
 
@@ -134,15 +151,16 @@ describe("GET /api/replays/:id", () => {
     expect(createSolariClient).not.toHaveBeenCalled();
   });
 
-  it("rejects a missing server key", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    delete process.env.SOLARI_API_KEY;
+  it("rejects a missing credential session", async () => {
+    process.env.SOLARI_API_KEY = "synthetic-owner-fallback";
+    sessionsResolve.mockReturnValue(null);
 
     const response = await GET(replayRequest(), routeContext(sessionRef));
 
     expect(response.status).toBe(503);
     expect(await expectNoStore(response)).toEqual({ status: "unavailable" });
     expect(createSolariClient).not.toHaveBeenCalled();
+    expect(lookupRunSession).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -153,9 +171,6 @@ describe("GET /api/replays/:id", () => {
     "session with spaces",
     "x".repeat(501),
   ])("rejects invalid replay ID %s", async (id) => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
-
     const response = await GET(replayRequest(), routeContext(id));
 
     expect(response.status).toBe(400);
@@ -164,8 +179,6 @@ describe("GET /api/replays/:id", () => {
   });
 
   it("returns the provider's ambiguous replay 404 as pending", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
     getReplayUrl.mockRejectedValue(Object.assign(new Error("not ready"), { status: 404 }));
 
     const response = await GET(replayRequest(), routeContext(sessionRef));
@@ -177,8 +190,6 @@ describe("GET /api/replays/:id", () => {
   });
 
   it("returns only a validated temporary HTTPS replay URL", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
     getReplayUrl.mockResolvedValue({
       url: "https://storage.getsolari.com/replay.ndjson.gz?signature=temporary",
       expiresInSeconds: 900,
@@ -192,20 +203,21 @@ describe("GET /api/replays/:id", () => {
       status: "ready",
       replayUrl: "https://storage.getsolari.com/replay.ndjson.gz?signature=temporary",
     });
-    expect(lookupRunSession).toHaveBeenCalledWith({
+    expect(lookupRunSession).toHaveBeenCalledWith(ownerId, {
       runId,
       country: "us",
       attempt: 1,
       sessionRef,
     });
+    expect(createSolariClient).toHaveBeenCalledWith(
+      "synthetic-user-capture-canary",
+    );
     expect(getReplayUrl).toHaveBeenCalledWith(rawSessionId);
     expect(getReplayUrl).toHaveBeenCalledOnce();
     expect(client.close).toHaveBeenCalledOnce();
   });
 
   it("rejects a non-HTTPS provider replay URL", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
     getReplayUrl.mockResolvedValue({
       url: "http://storage.getsolari.com/replay",
       expiresInSeconds: 900,
@@ -223,8 +235,6 @@ describe("GET /api/replays/:id", () => {
     { url: 42 },
     { url: `https://storage.getsolari.com/${"x".repeat(4_100)}` },
   ])("rejects an unbounded or non-string provider replay URL", async (replay) => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
     getReplayUrl.mockResolvedValue(replay);
 
     const response = await GET(replayRequest(), routeContext(sessionRef));
@@ -235,8 +245,6 @@ describe("GET /api/replays/:id", () => {
   });
 
   it("fails closed and records only a safe category when replay cleanup fails", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
     getReplayUrl.mockResolvedValue({
       url: "https://storage.getsolari.com/replay",
     });
@@ -254,8 +262,6 @@ describe("GET /api/replays/:id", () => {
   });
 
   it("returns a stable unavailable state for provider failure", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
     getReplayUrl.mockRejectedValue(
       Object.assign(new Error("slr_live_secret upstream body"), { status: 503 }),
     );
@@ -275,9 +281,6 @@ describe("GET /api/replays/:id", () => {
     { attempt: "0" },
     { attempt: "not-a-number" },
   ])("rejects malformed safe correlation %# before provider work", async (query) => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
-
     const response = await GET(replayRequest(query), routeContext(sessionRef));
 
     expect(response.status).toBe(400);
@@ -287,8 +290,6 @@ describe("GET /api/replays/:id", () => {
   });
 
   it("makes no provider call when safe correlation is absent", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
     lookupRunSession.mockReturnValue(null);
 
     const response = await GET(replayRequest(), routeContext(sessionRef));
@@ -298,4 +299,54 @@ describe("GET /api/replays/:id", () => {
     expect(createSolariClient).not.toHaveBeenCalled();
     expect(getReplayUrl).not.toHaveBeenCalled();
   });
+
+  it("rejects a missing local request header before credential access", async () => {
+    const response = await GET(
+      replayRequest({}, { "x-localelens-request": "0" }),
+      routeContext(sessionRef),
+    );
+
+    expect(response.status).toBe(400);
+    expect(sessionsResolve).not.toHaveBeenCalled();
+    expect(createSolariClient).not.toHaveBeenCalled();
+  });
+
+  it("keeps another credential owner from resolving the correlation", async () => {
+    const otherOwner = "b".repeat(64);
+    sessionsResolve.mockReturnValue({
+      ownerId: otherOwner,
+      apiKey: "synthetic-other-user-key",
+    });
+    lookupRunSession.mockReturnValue(null);
+
+    const response = await GET(replayRequest(), routeContext(sessionRef));
+
+    expect(response.status).toBe(404);
+    expect(lookupRunSession).toHaveBeenCalledWith(
+      otherOwner,
+      expect.objectContaining({ sessionRef }),
+    );
+    expect(createSolariClient).not.toHaveBeenCalled();
+    expect(getReplayUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403])(
+    "invalidates the credential owner after provider status %s",
+    async (status) => {
+      getReplayUrl.mockRejectedValue(
+        Object.assign(new Error("provider authentication body"), { status }),
+      );
+      sessionsDelete.mockReturnValue(ownerId);
+
+      const response = await GET(replayRequest(), routeContext(sessionRef));
+
+      expect(response.status).toBe(503);
+      expect(await expectNoStore(response)).toEqual({ status: "unavailable" });
+      expect(sessionsDelete).toHaveBeenCalledWith("opaque-token");
+      expect(deleteRunSessionsForOwner).toHaveBeenCalledWith(ownerId);
+      expect(response.headers.getSetCookie()[0]).toContain(
+        "localelens_session=;",
+      );
+    },
+  );
 });

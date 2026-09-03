@@ -1,21 +1,40 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { captureRegion, registerRunSession } = vi.hoisted(() => ({
+const {
+  captureRegion,
+  createSolariClient,
+  deleteRunSessionsForOwner,
+  registerRunSession,
+  sessionsDelete,
+  sessionsResolve,
+} = vi.hoisted(() => ({
   captureRegion: vi.fn(),
+  createSolariClient: vi.fn(() => ({ kind: "synthetic-client" })),
+  deleteRunSessionsForOwner: vi.fn(),
   registerRunSession: vi.fn(),
+  sessionsDelete: vi.fn(),
+  sessionsResolve: vi.fn(),
 }));
 
 vi.mock("@/src/features/capture/capture-region", () => ({ captureRegion }));
 vi.mock("@/src/features/capture/run-session-registry", () => ({
+  deleteRunSessionsForOwner,
   registerRunSession,
 }));
+vi.mock("@/src/features/credential/credential-session-store", () => ({
+  credentialSessionStore: {
+    delete: sessionsDelete,
+    resolve: sessionsResolve,
+  },
+}));
+vi.mock("@/src/lib/solari", () => ({ createSolariClient }));
 
 import * as captureRoute from "@/app/api/captures/route";
 
 const { POST } = captureRoute;
 
-const originalLiveCaptureEnabled = process.env.LIVE_CAPTURE_ENABLED;
-const originalApiKey = process.env.SOLARI_API_KEY;
+const ownerId = "a".repeat(64);
 const runId = "llr_123e4567-e89b-42d3-a456-426614174000";
 const sessionRef = "sol_dab46ee6c619545d0534";
 const validRequestBody = JSON.stringify({
@@ -58,10 +77,20 @@ const captureSuccess = {
   },
 };
 
-function jsonRequest(body: string): Request {
-  return new Request("http://localhost/api/captures", {
+function jsonRequest(
+  body: string,
+  headers: Record<string, string> = {},
+): NextRequest {
+  return new NextRequest("http://localhost/api/captures", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: "localelens_session=opaque-token",
+      Origin: "http://localhost",
+      "Sec-Fetch-Site": "same-origin",
+      "x-localelens-request": "1",
+      ...headers,
+    },
     body,
   });
 }
@@ -69,7 +98,7 @@ function jsonRequest(body: string): Request {
 function streamedRequest(
   chunks: readonly Uint8Array[],
   contentLength?: string,
-): Request {
+): NextRequest {
   let index = 0;
   const body = new ReadableStream<Uint8Array>({
     pull(controller) {
@@ -82,15 +111,20 @@ function streamedRequest(
       }
     },
   });
-  const headers = new Headers({ "Content-Type": "application/json" });
+  const headers = new Headers({
+    "Content-Type": "application/json",
+    Cookie: "localelens_session=opaque-token",
+    Origin: "http://localhost",
+    "Sec-Fetch-Site": "same-origin",
+    "x-localelens-request": "1",
+  });
   if (contentLength !== undefined) headers.set("Content-Length", contentLength);
 
-  return new Request("http://localhost/api/captures", {
+  return new NextRequest("http://localhost/api/captures", {
     method: "POST",
     headers,
     body,
-    duplex: "half",
-  } as RequestInit & { duplex: "half" });
+  });
 }
 
 async function expectNoStore(response: Response): Promise<unknown> {
@@ -98,22 +132,23 @@ async function expectNoStore(response: Response): Promise<unknown> {
   return response.json();
 }
 
+beforeEach(() => {
+  sessionsResolve.mockReturnValue({
+    ownerId,
+    apiKey: "synthetic-user-capture-canary",
+  });
+});
+
 afterEach(() => {
   captureRegion.mockReset();
   registerRunSession.mockReset();
+  createSolariClient.mockClear();
+  deleteRunSessionsForOwner.mockReset();
+  sessionsDelete.mockReset();
+  sessionsResolve.mockReset();
   vi.restoreAllMocks();
-
-  if (originalLiveCaptureEnabled === undefined) {
-    delete process.env.LIVE_CAPTURE_ENABLED;
-  } else {
-    process.env.LIVE_CAPTURE_ENABLED = originalLiveCaptureEnabled;
-  }
-
-  if (originalApiKey === undefined) {
-    delete process.env.SOLARI_API_KEY;
-  } else {
-    process.env.SOLARI_API_KEY = originalApiKey;
-  }
+  delete process.env.SOLARI_CAPTURE_DISABLED;
+  delete process.env.SOLARI_API_KEY;
 });
 
 describe("POST /api/captures", () => {
@@ -153,9 +188,8 @@ describe("POST /api/captures", () => {
     expect(response.headers.get("Allow")).toBe("POST, OPTIONS");
   });
 
-  it("fails closed when live capture is disabled", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "false";
-    process.env.SOLARI_API_KEY = "unit-test-key";
+  it("fails closed when capture is explicitly disabled", async () => {
+    process.env.SOLARI_CAPTURE_DISABLED = "true";
 
     const response = await POST(
       jsonRequest(validRequestBody),
@@ -169,9 +203,9 @@ describe("POST /api/captures", () => {
     expect(captureRegion).not.toHaveBeenCalled();
   });
 
-  it("rejects a missing server key", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    delete process.env.SOLARI_API_KEY;
+  it("rejects a missing credential session without provider work", async () => {
+    process.env.SOLARI_API_KEY = "synthetic-owner-fallback";
+    sessionsResolve.mockReturnValue(null);
 
     const response = await POST(
       jsonRequest(validRequestBody),
@@ -183,12 +217,22 @@ describe("POST /api/captures", () => {
       error: { code: "SOLARI_AUTH" },
     });
     expect(captureRegion).not.toHaveBeenCalled();
+    expect(createSolariClient).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["missing local header", { "x-localelens-request": "0" }],
+    ["cross origin", { Origin: "http://attacker.example" }],
+  ])("rejects %s before credential or provider access", async (_label, headers) => {
+    const response = await POST(jsonRequest(validRequestBody, headers));
+
+    expect(response.status).toBe(400);
+    expect(sessionsResolve).not.toHaveBeenCalled();
+    expect(captureRegion).not.toHaveBeenCalled();
+    expect(createSolariClient).not.toHaveBeenCalled();
   });
 
   it("rejects invalid JSON", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
-
     const response = await POST(jsonRequest("{"));
 
     expect(response.status).toBe(400);
@@ -199,9 +243,6 @@ describe("POST /api/captures", () => {
   });
 
   it("accepts a request body at 2 KiB and rejects one byte over", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
-
     const atLimit = await POST(jsonRequest("x".repeat(2_048)));
     const oneByteOver = await POST(jsonRequest("x".repeat(2_049)));
 
@@ -218,9 +259,6 @@ describe("POST /api/captures", () => {
   });
 
   it("rejects an oversized streamed body without a content length", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
-
     const response = await POST(
       streamedRequest([
         new TextEncoder().encode("x".repeat(2_048)),
@@ -237,9 +275,6 @@ describe("POST /api/captures", () => {
   });
 
   it("rejects a stream that exceeds a misleading content length", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
-
     const response = await POST(
       streamedRequest(
         [
@@ -258,18 +293,19 @@ describe("POST /api/captures", () => {
   });
 
   it("rejects a declared oversized body before reading its stream", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
     const pull = vi.fn();
-    const request = new Request("http://localhost/api/captures", {
+    const request = new NextRequest("http://localhost/api/captures", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Content-Length": "2049",
+        Cookie: "localelens_session=opaque-token",
+        Origin: "http://localhost",
+        "Sec-Fetch-Site": "same-origin",
+        "x-localelens-request": "1",
       },
       body: new ReadableStream<Uint8Array>({ pull }),
-      duplex: "half",
-    } as RequestInit & { duplex: "half" });
+    });
 
     const response = await POST(request);
 
@@ -278,9 +314,6 @@ describe("POST /api/captures", () => {
   });
 
   it("rejects unsupported countries before capture", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
-
     const response = await POST(
       jsonRequest(
         JSON.stringify({
@@ -301,8 +334,7 @@ describe("POST /api/captures", () => {
   });
 
   it("returns one successful regional capture", async () => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
+    process.env.SOLARI_API_KEY = "synthetic-owner-fallback";
     registerRunSession.mockReturnValue({
       runId,
       country: "us",
@@ -316,6 +348,7 @@ describe("POST /api/captures", () => {
       .spyOn(console, "info")
       .mockImplementation(() => undefined);
     captureRegion.mockImplementation(async (_request, dependencies) => {
+      expect(dependencies.createClient()).toEqual({ kind: "synthetic-client" });
       const correlation = dependencies.registerSession({
         runId,
         country: "us",
@@ -333,7 +366,7 @@ describe("POST /api/captures", () => {
 
     expect(response.status).toBe(200);
     expect(body).toEqual(captureSuccess);
-    expect(JSON.stringify(body)).not.toContain("unit-test-key");
+    expect(JSON.stringify(body)).not.toContain("synthetic-user-capture-canary");
     expect(JSON.stringify(body)).not.toContain("raw-provider-session-id");
     expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
       "raw-provider-session-id",
@@ -350,11 +383,18 @@ describe("POST /api/captures", () => {
       sessionRef,
     });
     expect(registerRunSession).toHaveBeenCalledWith({
+      ownerId,
       runId,
       country: "us",
       attempt: 1,
       sessionId: "raw-provider-session-id",
     });
+    expect(createSolariClient).toHaveBeenCalledWith(
+      "synthetic-user-capture-canary",
+    );
+    expect(createSolariClient).not.toHaveBeenCalledWith(
+      "synthetic-owner-fallback",
+    );
     expect(captureRegion).toHaveBeenCalledOnce();
   });
 
@@ -369,8 +409,6 @@ describe("POST /api/captures", () => {
     ["EXTRACTION_FAILED", 502],
     ["CAPTURE_FAILED", 502],
   ])("maps safe failure %s to status %i", async (code, status) => {
-    process.env.LIVE_CAPTURE_ENABLED = "true";
-    process.env.SOLARI_API_KEY = "unit-test-key";
     captureRegion.mockResolvedValue({
       ok: false,
       correlation: null,
@@ -386,5 +424,26 @@ describe("POST /api/captures", () => {
       ok: false,
       error: { code },
     });
+  });
+
+  it("invalidates the credential owner after a provider authentication failure", async () => {
+    sessionsDelete.mockReturnValue(ownerId);
+    captureRegion.mockResolvedValue({
+      ok: false,
+      correlation: null,
+      error: {
+        code: "SOLARI_AUTH",
+        message: "Solari authentication is unavailable.",
+        retryable: false,
+      },
+    });
+
+    const response = await POST(jsonRequest(validRequestBody));
+
+    expect(sessionsDelete).toHaveBeenCalledWith("opaque-token");
+    expect(deleteRunSessionsForOwner).toHaveBeenCalledWith(ownerId);
+    expect(response.headers.getSetCookie()[0]).toContain(
+      "localelens_session=;",
+    );
   });
 });

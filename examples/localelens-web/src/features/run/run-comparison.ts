@@ -12,6 +12,10 @@ import {
 import { SAFE_CAPTURE_ERROR_CODES } from "@/src/features/capture/error-codes";
 import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 import { toSafeCaptureFailure } from "@/src/features/capture/safe-error";
+import {
+  LOCAL_REQUEST_HEADER,
+  LOCAL_REQUEST_HEADER_VALUE,
+} from "@/src/features/credential/protocol";
 
 const clientTimeoutMs = 45_000;
 const isoDateSource =
@@ -369,7 +373,10 @@ async function runCountryRequest(
       transportPool.run(country, signal, async () => {
         const response = await fetch("/api/captures", {
           body: JSON.stringify({ country, url, ...context }),
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            [LOCAL_REQUEST_HEADER]: LOCAL_REQUEST_HEADER_VALUE,
+          },
           method: "POST",
           signal,
         });

@@ -4,6 +4,10 @@ import { ExternalLink, LoaderCircle, RotateCcw, Unlink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type { CaptureCorrelation } from "@/src/features/capture/contracts";
+import {
+  LOCAL_REQUEST_HEADER,
+  LOCAL_REQUEST_HEADER_VALUE,
+} from "@/src/features/credential/protocol";
 
 type ReplayState =
   | { status: "pending" }
@@ -93,6 +97,7 @@ export function ReplayLink({ correlation }: ReplayLinkProps) {
       });
 
       void fetch(`/api/replays/${correlation.sessionRef}?${query}`, {
+        headers: { [LOCAL_REQUEST_HEADER]: LOCAL_REQUEST_HEADER_VALUE },
         signal: lookupController.signal,
       })
         .then(async (response) => {

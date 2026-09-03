@@ -359,6 +359,10 @@ describe("runComparison", () => {
           url: "https://regional.example.test/pricing",
           ...runContext,
         }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-localelens-request": "1",
+        },
       }),
     );
     expect(runEvents.started).toHaveBeenCalledWith("gb");
@@ -395,7 +399,10 @@ describe("runComparison", () => {
           url: "https://regional.example.test/pricing",
           ...runContext,
         }),
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-localelens-request": "1",
+        },
         method: "POST",
       }),
     );

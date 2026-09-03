@@ -38,7 +38,10 @@ describe("ReplayLink", () => {
     await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(1));
     expect(fetchReplay).toHaveBeenCalledWith(
       "/api/replays/sol_dab46ee6c619545d0534?runId=llr_123e4567-e89b-42d3-a456-426614174000&country=us&attempt=1",
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      expect.objectContaining({
+        headers: { "x-localelens-request": "1" },
+        signal: expect.any(AbortSignal),
+      }),
     );
     expect(JSON.stringify(fetchReplay.mock.calls)).not.toContain(
       "raw-provider-session-id",
