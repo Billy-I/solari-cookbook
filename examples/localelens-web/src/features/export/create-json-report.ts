@@ -45,10 +45,10 @@ type SafeFailure = {
 };
 
 type JsonReport = {
-  schemaVersion: 2;
+  schemaVersion: 3;
+  provenance: "live_solari";
   generatedAt: string;
   runId: AppRunId;
-  mode: ComparisonRun["mode"];
   status: "complete" | "partial";
   target: { hostname: string };
   countries: SupportedCountry[];
@@ -60,7 +60,6 @@ type JsonReport = {
 
 export type JsonReportInput = {
   generatedAt: string;
-  mode: ComparisonRun["mode"];
   regions: RegionRunState[];
   runId: AppRunId;
   status: ComparisonRun["status"];
@@ -205,10 +204,10 @@ export function createJsonReport(input: JsonReportInput): JsonReportOutput {
   }
 
   const report: JsonReport = {
-    schemaVersion: 2,
+    schemaVersion: 3,
+    provenance: "live_solari",
     generatedAt,
     runId: input.runId,
-    mode: input.mode,
     status:
       input.status === "complete" && results.length === sortedRegions.length
         ? "complete"

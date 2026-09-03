@@ -37,7 +37,6 @@ function successfulRegion(
 function partialInput(): JsonReportInput {
   return {
     generatedAt,
-    mode: "live",
     runId,
     regions: [
       successfulRegion("us", {
@@ -77,9 +76,9 @@ describe("createJsonReport", () => {
 
     expect(report).toEqual(
       expect.objectContaining({
-        schemaVersion: 2,
+        schemaVersion: 3,
         generatedAt,
-        mode: "live",
+        provenance: "live_solari",
         runId,
         status: "partial",
         target: { hostname: "regional.example.test" },
@@ -151,12 +150,12 @@ describe("createJsonReport", () => {
     expect(output.json).not.toContain("SOLARI_API_KEY");
     expect(output.json).not.toContain("?token=");
     expect(output.json).not.toContain("#offer");
+    expect(output.json).not.toContain('"mode"');
   });
 
-  it("keeps sample provenance while omitting provider session references", () => {
+  it("uses literal live provenance while omitting absent session references", () => {
     const output = createJsonReport({
       generatedAt,
-      mode: "sample",
       regions: [
         { country: "us", response: sampleCaptureByCountry.us, stage: "complete" },
         { country: "gb", response: sampleCaptureByCountry.gb, stage: "complete" },
@@ -167,7 +166,12 @@ describe("createJsonReport", () => {
     });
     const report = JSON.parse(output.json);
 
-    expect(report).toMatchObject({ schemaVersion: 2, mode: "sample", runId });
+    expect(report).toMatchObject({
+      schemaVersion: 3,
+      provenance: "live_solari",
+      runId,
+    });
+    expect(report).not.toHaveProperty("mode");
     expect(
       report.results.every(
         ({ receipt }: { receipt: { sessionRef: string | null } }) =>

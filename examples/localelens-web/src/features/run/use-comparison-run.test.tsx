@@ -1,4 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AuditFormValue } from "@/src/components/audit-form";
@@ -114,7 +115,6 @@ describe("useComparisonRun", () => {
       useComparisonRun({
         comparisonRunner: comparison.runner,
         createRunId,
-        mode: "live",
       }),
     );
 
@@ -145,10 +145,10 @@ describe("useComparisonRun", () => {
     await settle(run, comparison.calls[0]!.resolve);
   });
 
-  it("starts idle and reports the configured provenance mode", () => {
-    const { result } = renderHook(() => useComparisonRun({ mode: "live" }));
+  it("starts idle without exposing a runtime mode", () => {
+    const { result } = renderHook(() => useComparisonRun());
 
-    expect(result.current.mode).toBe("live");
+    expect(result.current).not.toHaveProperty("mode");
     expect(result.current.status).toBe("idle");
     expect(result.current.regions).toEqual([]);
   });
@@ -156,7 +156,7 @@ describe("useComparisonRun", () => {
   it("loads countries independently and exposes the first result before all settle", async () => {
     const comparison = deferredComparisonRunner();
     const { result } = renderHook(() =>
-      useComparisonRun({ comparisonRunner: comparison.runner, mode: "live" }),
+      useComparisonRun({ comparisonRunner: comparison.runner }),
     );
 
     let run!: Promise<void>;
@@ -203,7 +203,7 @@ describe("useComparisonRun", () => {
   it("keeps successful countries when one country fails", async () => {
     const comparison = deferredComparisonRunner();
     const { result } = renderHook(() =>
-      useComparisonRun({ comparisonRunner: comparison.runner, mode: "live" }),
+      useComparisonRun({ comparisonRunner: comparison.runner }),
     );
 
     let run!: Promise<void>;
@@ -233,7 +233,6 @@ describe("useComparisonRun", () => {
       useComparisonRun({
         comparisonRunner: comparison.runner,
         countryRunner: country.runner,
-        mode: "live",
       }),
     );
 
@@ -282,7 +281,6 @@ describe("useComparisonRun", () => {
       useComparisonRun({
         comparisonRunner: comparison.runner,
         countryRunner: country.runner,
-        mode: "live",
       }),
     );
     const replacement: AuditFormValue = {
@@ -329,7 +327,6 @@ describe("useComparisonRun", () => {
       useComparisonRun({
         comparisonRunner: comparison.runner,
         countryRunner: country.runner,
-        mode: "live",
       }),
     );
 
@@ -357,7 +354,6 @@ describe("useComparisonRun", () => {
       useComparisonRun({
         comparisonRunner: comparison.runner,
         countryRunner: country.runner,
-        mode: "live",
       }),
     );
 
@@ -387,7 +383,7 @@ describe("useComparisonRun", () => {
   it("ignores retry requests for countries that are not failed and retryable", async () => {
     const country = deferredCountryRunner();
     const { result } = renderHook(() =>
-      useComparisonRun({ countryRunner: country.runner, mode: "live" }),
+      useComparisonRun({ countryRunner: country.runner }),
     );
 
     await act(async () => result.current.retry("us"));
@@ -399,7 +395,7 @@ describe("useComparisonRun", () => {
   it("cancels active work and ignores every late callback", async () => {
     const comparison = deferredComparisonRunner();
     const { result } = renderHook(() =>
-      useComparisonRun({ comparisonRunner: comparison.runner, mode: "live" }),
+      useComparisonRun({ comparisonRunner: comparison.runner }),
     );
 
     let run!: Promise<void>;
@@ -421,7 +417,7 @@ describe("useComparisonRun", () => {
   it("a second start aborts and replaces the first run while ignoring its stale results", async () => {
     const comparison = deferredComparisonRunner();
     const { result } = renderHook(() =>
-      useComparisonRun({ comparisonRunner: comparison.runner, mode: "live" }),
+      useComparisonRun({ comparisonRunner: comparison.runner }),
     );
     const replacement: AuditFormValue = {
       url: "https://second.example.test/",
@@ -459,7 +455,6 @@ describe("useComparisonRun", () => {
       useComparisonRun({
         comparisonRunner: comparison.runner,
         countryRunner: country.runner,
-        mode: "live",
       }),
     );
 
@@ -494,16 +489,12 @@ describe("useComparisonRun", () => {
     expect(result.current.status).toBe("complete");
   });
 
-  it("uses deterministic fixture timing in sample mode without calling the live runner", async () => {
-    vi.useFakeTimers();
+  it("uses the live comparison runner after an explicit start", async () => {
     const comparison = deferredComparisonRunner();
-    const country = deferredCountryRunner();
     const { result } = renderHook(() =>
       useComparisonRun({
         comparisonRunner: comparison.runner,
         createRunId: () => "llr_00000000-0000-4000-8000-000000000000",
-        countryRunner: country.runner,
-        mode: "sample",
       }),
     );
 
@@ -511,19 +502,19 @@ describe("useComparisonRun", () => {
     act(() => {
       run = result.current.start(value);
     });
-    await act(async () => {
-      await vi.runAllTimersAsync();
-      await run;
-    });
+    expect(comparison.calls).toHaveLength(1);
+    expect(comparison.calls[0]?.input).toEqual(value);
+    expect(result.current).not.toHaveProperty("mode");
+    await settle(run, comparison.calls[0]!.resolve);
+  });
 
-    expect(result.current.status).toBe("complete");
-    expect(result.current.regions.map(({ response }) => response)).toEqual([
-      sampleCaptureByCountry.us,
-      sampleCaptureByCountry.gb,
-      sampleCaptureByCountry.de,
-    ]);
-    expect(comparison.calls).toHaveLength(0);
-    expect(country.calls).toHaveLength(0);
+  it("keeps the production runtime free of sample-mode branches", () => {
+    const source = readFileSync(
+      "src/features/run/use-comparison-run.ts",
+      "utf8",
+    );
+
+    expect(source).not.toMatch(/mode|sampleCaptureByCountry|sampleDelayMs/);
   });
 
   it("retains timed-out transport ownership and permits retry only after that transport settles", async () => {
@@ -540,7 +531,7 @@ describe("useComparisonRun", () => {
     );
     vi.stubGlobal("fetch", fetch);
     const { result, unmount } = renderHook(() =>
-      useComparisonRun({ mode: "live" }),
+      useComparisonRun(),
     );
 
     let run!: Promise<void>;
@@ -594,7 +585,7 @@ describe("useComparisonRun", () => {
       });
     });
     vi.stubGlobal("fetch", fetch);
-    const { result } = renderHook(() => useComparisonRun({ mode: "live" }));
+    const { result } = renderHook(() => useComparisonRun());
 
     let first!: Promise<void>;
     act(() => {
@@ -648,7 +639,7 @@ describe("useComparisonRun", () => {
         }),
     );
     vi.stubGlobal("fetch", fetch);
-    const { result } = renderHook(() => useComparisonRun({ mode: "live" }));
+    const { result } = renderHook(() => useComparisonRun());
 
     let first!: Promise<void>;
     act(() => {
@@ -693,13 +684,12 @@ describe("useComparisonRun", () => {
       ],
     ],
     ["unsupported", ["us", "zz"]],
-  ])("rejects %s countries before sample or live work starts", async (_case, countries) => {
-    for (const mode of ["sample", "live"] as const) {
+  ])("rejects %s countries before live work starts", async (_case, countries) => {
       vi.useFakeTimers();
       const comparisonRunner = vi.fn<ComparisonRunner>(async () => undefined);
       const countryRunner = vi.fn<CountryRunner>(async () => undefined);
       const { result, unmount } = renderHook(() =>
-        useComparisonRun({ comparisonRunner, countryRunner, mode }),
+        useComparisonRun({ comparisonRunner, countryRunner }),
       );
       const invalidValue = {
         ...value,
@@ -725,13 +715,12 @@ describe("useComparisonRun", () => {
       expect(vi.getTimerCount()).toBe(0);
       unmount();
       vi.useRealTimers();
-    }
   });
 
   it("rejects an invalid replacement without aborting or changing the current run", async () => {
     const comparison = deferredComparisonRunner();
     const { result } = renderHook(() =>
-      useComparisonRun({ comparisonRunner: comparison.runner, mode: "live" }),
+      useComparisonRun({ comparisonRunner: comparison.runner }),
     );
     const invalidValue: AuditFormValue = {
       ...value,
@@ -772,7 +761,6 @@ describe("useComparisonRun", () => {
       useComparisonRun({
         comparisonRunner: comparison.runner,
         countryRunner: country.runner,
-        mode: "live",
       }),
     );
 

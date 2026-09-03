@@ -12,8 +12,6 @@ describe("RunReceipt", () => {
   it("hides run identity before an action creates a run", () => {
     render(
       <RunReceipt
-        featured
-        mode="sample"
         runId={null}
         status="idle"
         value={{ ...value, countries: [...value.countries] }}
@@ -26,7 +24,6 @@ describe("RunReceipt", () => {
   it("shows the safe app run identity after a comparison starts", () => {
     render(
       <RunReceipt
-        mode="live"
         runId="llr_123e4567-e89b-42d3-a456-426614174000"
         status="running"
         value={{ ...value, countries: [...value.countries] }}
@@ -37,5 +34,6 @@ describe("RunReceipt", () => {
     expect(
       screen.getByText("llr_123e4567-e89b-42d3-a456-426614174000"),
     ).toBeVisible();
+    expect(screen.getByText("Live Solari capture")).toBeVisible();
   });
 });

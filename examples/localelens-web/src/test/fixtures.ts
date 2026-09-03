@@ -98,9 +98,9 @@ export const sampleCaptureByCountry = {
 } satisfies Record<SampleCountry, CaptureSuccess>;
 
 export const sampleReport = {
-  schemaVersion: 1,
+  schemaVersion: 3,
   status: "complete",
-  mode: "sample",
+  provenance: "live_solari",
   requestedUrl,
   countries: ["us", "gb", "de"],
   results: [

@@ -6,17 +6,8 @@ import type {
   SupportedCountry,
 } from "@/src/features/capture/contracts";
 import { COUNTRY_NAMES } from "@/src/features/capture/countries";
-import type {
-  ComparisonRun,
-  RegionRunState,
-} from "@/src/features/run/use-comparison-run";
+import type { RegionRunState } from "@/src/features/run/use-comparison-run";
 import { ReplayLink } from "@/src/components/replay-link";
-
-const sampleImages: Partial<Record<SupportedCountry, string>> = {
-  us: "/sample/us.jpg",
-  gb: "/sample/gb.jpg",
-  de: "/sample/de.jpg",
-};
 
 const monthNames = [
   "Jan",
@@ -55,12 +46,11 @@ function stageLabel(stage: RegionRunState["stage"]): string {
 }
 
 type RegionResultProps = {
-  mode: ComparisonRun["mode"];
   region: RegionRunState;
   onRetry: (country: SupportedCountry) => void;
 };
 
-export function RegionResult({ mode, region, onRetry }: RegionResultProps) {
+export function RegionResult({ region, onRetry }: RegionResultProps) {
   const countryName = COUNTRY_NAMES[region.country];
 
   if (!region.response) {
@@ -119,9 +109,6 @@ export function RegionResult({ mode, region, onRetry }: RegionResultProps) {
   const { evidence } = region.response;
   const capturedAt = formatTimestamp(evidence.capturedAt);
   const host = new URL(evidence.requestedUrl).host;
-  const sampleImage = mode === "sample"
-    ? sampleImages[region.country]
-    : undefined;
   const liveImage = `data:image/jpeg;base64,${region.response.screenshot.base64}`;
   const correlation: CaptureCorrelation | null =
     region.response.receipt.sessionRef === null
@@ -142,27 +129,14 @@ export function RegionResult({ mode, region, onRetry }: RegionResultProps) {
         <strong>{region.country.toUpperCase()}</strong>
         <span>{countryName}</span>
       </header>
-      <p className="capture-provenance">
-        {mode === "sample" ? "Sample evidence" : "Live evidence"}
-      </p>
-      {sampleImage ? (
-        <Image
-          alt={`${countryName} evidence for ${host}, captured ${capturedAt}`}
-          height={900}
-          priority
-          sizes="(max-width: 680px) 100vw, (max-width: 1000px) 50vw, 33vw"
-          src={sampleImage}
-          width={1280}
-        />
-      ) : (
-        <Image
-          alt={`${countryName} evidence for ${host}, captured ${capturedAt}`}
-          height={900}
-          src={liveImage}
-          unoptimized
-          width={region.response.screenshot.width}
-        />
-      )}
+      <p className="capture-provenance">Live evidence</p>
+      <Image
+        alt={`${countryName} evidence for ${host}, captured ${capturedAt}`}
+        height={900}
+        src={liveImage}
+        unoptimized
+        width={region.response.screenshot.width}
+      />
       <dl className="evidence-list">
         <div>
           <dt>Final URL</dt>
@@ -190,7 +164,7 @@ export function RegionResult({ mode, region, onRetry }: RegionResultProps) {
         </div>
       </dl>
       <p className="capture-time">Captured {capturedAt}</p>
-      {mode === "live" && correlation ? (
+      {correlation ? (
         <>
           <p className="session-reference">{correlation.sessionRef}</p>
           <ReplayLink correlation={correlation} />

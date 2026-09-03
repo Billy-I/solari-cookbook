@@ -139,9 +139,9 @@ const reportResultSchema = z
 
 export const reportSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(3),
     status: z.enum(["complete", "partial"]),
-    mode: z.enum(["sample", "live"]),
+    provenance: z.literal("live_solari"),
     requestedUrl: httpsUrlSchema,
     countries: z
       .array(supportedCountrySchema)

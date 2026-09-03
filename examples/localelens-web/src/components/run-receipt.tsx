@@ -3,16 +3,12 @@ import type { AppRunId } from "@/src/features/capture/contracts";
 import type { ComparisonRun } from "@/src/features/run/use-comparison-run";
 
 type RunReceiptProps = {
-  featured?: boolean;
-  mode: ComparisonRun["mode"];
   runId: AppRunId | null;
   status: ComparisonRun["status"];
   value: AuditFormValue;
 };
 
 export function RunReceipt({
-  featured = false,
-  mode,
   runId,
   status,
   value,
@@ -22,11 +18,7 @@ export function RunReceipt({
       <div>
         <dt>Run receipt</dt>
         <dd>
-          {featured
-            ? "Featured sample"
-            : mode === "sample"
-              ? "Sample evidence"
-              : "Live Solari capture"}
+          Live Solari capture
         </dd>
       </div>
       <div>
@@ -36,11 +28,7 @@ export function RunReceipt({
       <div>
         <dt>Status</dt>
         <dd>
-          {featured
-            ? "Preview"
-            : status === "idle"
-              ? "Ready to compare"
-              : status}
+          {status === "idle" ? "Ready to compare" : status}
         </dd>
       </div>
       <div>

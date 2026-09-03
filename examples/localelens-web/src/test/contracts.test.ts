@@ -265,11 +265,11 @@ describe("captureResponseSchema", () => {
 });
 
 describe("reportSchema", () => {
-  it("accepts a bounded two-country sample report", () => {
+  it("accepts a bounded two-country live Solari report", () => {
     const report = {
-      schemaVersion: 1,
+      schemaVersion: 3,
       status: "complete",
-      mode: "sample",
+      provenance: "live_solari",
       requestedUrl: "https://example.com",
       countries: ["us", "gb"],
       results: [
@@ -295,9 +295,9 @@ describe("reportSchema", () => {
     const countries = [...SUPPORTED_COUNTRIES];
     expect(
       reportSchema.parse({
-        schemaVersion: 1,
+        schemaVersion: 3,
         status: "partial",
-        mode: "live",
+        provenance: "live_solari",
         requestedUrl: "https://example.com",
         countries,
         results: [{ country: "gb", evidence: validEvidence }],
@@ -307,9 +307,9 @@ describe("reportSchema", () => {
 
     expect(() =>
       reportSchema.parse({
-        schemaVersion: 1,
+        schemaVersion: 3,
         status: "complete",
-        mode: "sample",
+        provenance: "live_solari",
         requestedUrl: "https://example.com",
         countries: [...countries, "us"],
         results: [{ country: "gb", evidence: validEvidence }],
@@ -321,9 +321,9 @@ describe("reportSchema", () => {
   it("rejects session-control fields from report results", () => {
     expect(() =>
       reportSchema.parse({
-        schemaVersion: 1,
+        schemaVersion: 3,
         status: "complete",
-        mode: "sample",
+        provenance: "live_solari",
         requestedUrl: "https://example.com",
         countries: ["us", "gb"],
         results: [

@@ -5,7 +5,6 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { AuditFormValue } from "@/src/components/audit-form";
 import type {
   AppRunId,
-  CaptureFailure,
   CaptureResponse,
   CaptureStage,
   SupportedCountry,
@@ -18,9 +17,7 @@ import {
   runCountryCapture,
   type RunEvents,
   validateSelectedCountries,
-  type RunContext,
 } from "@/src/features/run/run-comparison";
-import { sampleCaptureByCountry } from "@/src/test/fixtures";
 
 export type RegionRunState = {
   country: SupportedCountry;
@@ -32,7 +29,6 @@ export type ComparisonRunner = typeof runComparison;
 export type CountryRunner = typeof runCountryCapture;
 
 export type ComparisonRun = {
-  mode: "sample" | "live";
   status: "idle" | "running" | "partial" | "complete" | "cancelled";
   regions: RegionRunState[];
   runId: AppRunId | null;
@@ -94,34 +90,18 @@ type RunAction =
     }
   | { type: "cancel"; generation: number; operationId: number };
 
-type FixtureLookup = (country: SupportedCountry) => CaptureResponse;
-
 type ComparisonRunOptions = {
   comparisonRunner?: ComparisonRunner;
   countryRunner?: CountryRunner;
-  fixtureLookup?: FixtureLookup;
   createRunId?: () => AppRunId;
-  mode?: ComparisonRun["mode"];
 };
 
-const stepDelayMs = 60;
-const countryStaggerMs = 40;
 const inProgressStages: CaptureStage[] = [
   "launching",
   "navigating",
   "extracting",
   "closing",
 ];
-
-const unavailableFixture: CaptureFailure = {
-  ok: false,
-  correlation: null,
-  error: {
-    code: "CAPTURE_FAILED",
-    message: "Sample evidence is unavailable for this market.",
-    retryable: false,
-  },
-};
 
 const initialState: RunState = {
   batch: 0,
@@ -133,18 +113,6 @@ const initialState: RunState = {
   totalBatches: 0,
   value: null,
 };
-
-function defaultFixtureLookup(country: SupportedCountry): CaptureResponse {
-  if (country === "us" || country === "gb" || country === "de") {
-    return sampleCaptureByCountry[country];
-  }
-
-  return unavailableFixture;
-}
-
-function configuredMode(): ComparisonRun["mode"] {
-  return process.env.NEXT_PUBLIC_APP_MODE === "live" ? "live" : "sample";
-}
 
 function deriveStatus(regions: RegionRunState[]): RunState["status"] {
   const settled = regions.filter(
@@ -264,26 +232,6 @@ function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
 }
 
-function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timeoutId = window.setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, milliseconds);
-    const onAbort = () => {
-      window.clearTimeout(timeoutId);
-      reject(abortReason(signal));
-    };
-
-    if (signal.aborted) {
-      onAbort();
-      return;
-    }
-
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
 async function waitForSettlement(
   settlement: Promise<void>,
   signal: AbortSignal,
@@ -311,8 +259,6 @@ export function useComparisonRun(
     comparisonRunner = runComparison,
     countryRunner = runCountryCapture,
     createRunId = createAppRunId,
-    fixtureLookup = defaultFixtureLookup,
-    mode = configuredMode(),
   } = options;
   const [state, dispatch] = useReducer(reducer, initialState);
   const generationRef = useRef(0);
@@ -344,13 +290,13 @@ export function useComparisonRun(
         }
       };
 
-      if (mode === "live" && pool.hasSignal(controller.signal)) {
+      if (pool.hasSignal(controller.signal)) {
         void pool.whenSignalSettled(controller.signal).then(remove);
       } else {
         remove();
       }
     },
-    [mode],
+    [],
   );
 
   useEffect(
@@ -408,43 +354,6 @@ export function useComparisonRun(
     [],
   );
 
-  const runSampleCountry = useCallback(
-    async (
-      country: SupportedCountry,
-      staggerMs: number,
-      operationId: number,
-      signal: AbortSignal,
-      context: RunContext,
-    ) => {
-      await wait(staggerMs, signal);
-      for (const stage of inProgressStages) {
-        dispatch({ country, operationId, stage, type: "advance" });
-        await wait(stepDelayMs, signal);
-      }
-
-      const fixture = fixtureLookup(country);
-      const response: CaptureResponse = fixture.ok
-        ? {
-            ...fixture,
-            receipt: {
-              ...fixture.receipt,
-              runId: context.runId,
-              attempt: context.attempt,
-              sessionRef: null,
-            },
-          }
-        : { ...fixture, correlation: null };
-      dispatch({
-        country,
-        operationId,
-        response,
-        stage: response.ok ? "complete" : "failed",
-        type: "advance",
-      });
-    },
-    [fixtureLookup],
-  );
-
   const start = useCallback(
     async (value: AuditFormValue) => {
       const countries = validateSelectedCountries(value);
@@ -469,41 +378,27 @@ export function useComparisonRun(
       });
 
       try {
-        if (mode === "sample") {
-          await Promise.all(
-            countries.map((country, index) =>
-              runSampleCountry(
-                country,
-                index * countryStaggerMs,
-                operationId,
-                controller.signal,
-                { runId, attempt: 1 },
+        const handoffSignals = previousSignals.filter((signal) =>
+          transportPoolRef.current.hasSignal(signal),
+        );
+        if (handoffSignals.length > 0) {
+          await waitForSettlement(
+            Promise.all(
+              handoffSignals.map((signal) =>
+                transportPoolRef.current.whenSignalSettled(signal),
               ),
-            ),
-          );
-        } else {
-          const handoffSignals = previousSignals.filter((signal) =>
-            transportPoolRef.current.hasSignal(signal),
-          );
-          if (handoffSignals.length > 0) {
-            await waitForSettlement(
-              Promise.all(
-                handoffSignals.map((signal) =>
-                  transportPoolRef.current.whenSignalSettled(signal),
-                ),
-              ).then(() => undefined),
-              controller.signal,
-            );
-            if (controller.signal.aborted) throw abortReason(controller.signal);
-          }
-          await comparisonRunner(
-            validatedValue,
-            { runId, attempt: 1 },
-            eventsFor(operationId, generation),
+            ).then(() => undefined),
             controller.signal,
-            transportPoolRef.current,
           );
+          if (controller.signal.aborted) throw abortReason(controller.signal);
         }
+        await comparisonRunner(
+          validatedValue,
+          { runId, attempt: 1 },
+          eventsFor(operationId, generation),
+          controller.signal,
+          transportPoolRef.current,
+        );
       } catch (error) {
         if (!controller.signal.aborted) throw error;
       } finally {
@@ -515,9 +410,7 @@ export function useComparisonRun(
       comparisonRunner,
       createRunId,
       eventsFor,
-      mode,
       releaseController,
-      runSampleCountry,
     ],
   );
 
@@ -532,7 +425,7 @@ export function useComparisonRun(
         generationRef.current !== state.generation ||
         currentOperationIdsRef.current.get(country) !== expectedOperationId ||
         retryReservationsRef.current.has(country) ||
-        (mode === "live" && transportPoolRef.current.hasCountry(country)) ||
+        transportPoolRef.current.hasCountry(country) ||
         region?.stage !== "failed" ||
         !region.response ||
         region.response.ok ||
@@ -557,24 +450,14 @@ export function useComparisonRun(
       });
 
       try {
-        if (mode === "sample") {
-          await runSampleCountry(
-            country,
-            0,
-            operationId,
-            controller.signal,
-            { runId: state.runId, attempt },
-          );
-        } else {
-          await countryRunner(
-            country,
-            state.value.url,
-            { runId: state.runId, attempt },
-            eventsFor(operationId, state.generation),
-            controller.signal,
-            transportPoolRef.current,
-          );
-        }
+        await countryRunner(
+          country,
+          state.value.url,
+          { runId: state.runId, attempt },
+          eventsFor(operationId, state.generation),
+          controller.signal,
+          transportPoolRef.current,
+        );
       } catch (error) {
         if (!controller.signal.aborted) throw error;
       } finally {
@@ -587,9 +470,7 @@ export function useComparisonRun(
     [
       countryRunner,
       eventsFor,
-      mode,
       releaseController,
-      runSampleCountry,
       state.generation,
       state.operationIds,
       state.regions,
@@ -611,7 +492,6 @@ export function useComparisonRun(
 
   return {
     cancel,
-    mode,
     progress: {
       selected: state.regions.length,
       queued: state.regions.filter(({ stage }) => stage === "queued").length,

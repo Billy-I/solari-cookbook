@@ -9,7 +9,6 @@ describe("ComparisonResults", () => {
   it("describes the exact deterministic comparison normalization rules", () => {
     render(
       <ComparisonResults
-        mode="sample"
         onRetry={() => undefined}
         regions={[
           {
@@ -56,7 +55,7 @@ describe("ComparisonResults", () => {
     ];
 
     const { rerender } = render(
-      <ComparisonResults mode="sample" onRetry={onRetry} regions={regions} />,
+      <ComparisonResults onRetry={onRetry} regions={regions} />,
     );
 
     const whatChanged = screen.getByRole("heading", { name: "What changed" });
@@ -87,7 +86,6 @@ describe("ComparisonResults", () => {
 
     rerender(
       <ComparisonResults
-        mode="sample"
         onRetry={onRetry}
         regions={[
           regions[0]!,

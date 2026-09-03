@@ -13,7 +13,7 @@ describe("RegionResult", () => {
       response: sampleCaptureByCountry.us,
     };
 
-    render(<RegionResult mode="sample" onRetry={vi.fn()} region={region} />);
+    render(<RegionResult onRetry={vi.fn()} region={region} />);
 
     expect(
       screen.getByRole("img", {
@@ -22,9 +22,9 @@ describe("RegionResult", () => {
     ).toBeVisible();
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
-      expect.stringContaining("%2Fsample%2Fus.jpg"),
+      `data:image/jpeg;base64,${sampleCaptureByCountry.us.screenshot.base64}`,
     );
-    expect(screen.getByText("Sample evidence")).toBeVisible();
+    expect(screen.getByText("Live evidence")).toBeVisible();
   });
 
   it("uses bounded live screenshot bytes rather than a featured sample", () => {
@@ -44,7 +44,7 @@ describe("RegionResult", () => {
       },
     };
 
-    render(<RegionResult mode="live" onRetry={vi.fn()} region={region} />);
+    render(<RegionResult onRetry={vi.fn()} region={region} />);
 
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
@@ -67,7 +67,7 @@ describe("RegionResult", () => {
       },
     };
 
-    render(<RegionResult mode="sample" onRetry={vi.fn()} region={region} />);
+    render(<RegionResult onRetry={vi.fn()} region={region} />);
 
     expect(screen.getByText("Not detected")).toBeVisible();
     expect(screen.queryByText("None")).not.toBeInTheDocument();
@@ -89,7 +89,7 @@ describe("RegionResult", () => {
       },
     };
 
-    render(<RegionResult mode="sample" onRetry={onRetry} region={region} />);
+    render(<RegionResult onRetry={onRetry} region={region} />);
 
     expect(screen.getByText("CAPTURE_FAILED")).toBeVisible();
     expect(screen.getByText("Sample capture was unavailable.")).toBeVisible();
@@ -101,7 +101,6 @@ describe("RegionResult", () => {
   it("keeps a running card distinct from sample evidence", () => {
     render(
       <RegionResult
-        mode="live"
         onRetry={vi.fn()}
         region={{ country: "de", stage: "navigating", response: null }}
       />,

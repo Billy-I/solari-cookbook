@@ -21,7 +21,6 @@ describe("ExportActions", () => {
   it("keeps download and print disabled until two regional receipts succeed", () => {
     render(
       <ExportActions
-        mode="live"
         regions={completeRegions.slice(0, 1)}
         runId="llr_123e4567-e89b-42d3-a456-426614174000"
         status="partial"
@@ -37,7 +36,6 @@ describe("ExportActions", () => {
   it("keeps preview exports disabled until a run receipt exists", () => {
     render(
       <ExportActions
-        mode="sample"
         regions={completeRegions}
         runId={null}
         status="complete"
@@ -48,14 +46,13 @@ describe("ExportActions", () => {
     expect(screen.getByRole("button", { name: "Download JSON" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Print evidence" })).toBeDisabled();
     expect(
-      screen.getByText("Run the featured demo to create an exportable receipt."),
+      screen.getByText("Run a live comparison to create an exportable receipt."),
     ).toBeVisible();
   });
 
   it("describes the pending live action without calling it a featured demo", () => {
     render(
       <ExportActions
-        mode="live"
         regions={completeRegions}
         runId={null}
         status="idle"
@@ -107,7 +104,6 @@ describe("ExportActions", () => {
 
     render(
       <ExportActions
-        mode="live"
         regions={regions}
         runId="llr_123e4567-e89b-42d3-a456-426614174000"
         status="partial"
@@ -136,7 +132,6 @@ describe("ExportActions", () => {
 
     render(
       <ExportActions
-        mode="sample"
         regions={completeRegions.slice(0, 2)}
         runId="llr_123e4567-e89b-42d3-a456-426614174000"
         status="complete"

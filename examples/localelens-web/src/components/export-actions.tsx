@@ -14,7 +14,6 @@ import type {
 } from "@/src/features/run/use-comparison-run";
 
 type ExportActionsProps = {
-  mode: ComparisonRun["mode"];
   regions: RegionRunState[];
   runId: AppRunId | null;
   status: ComparisonRun["status"];
@@ -22,7 +21,6 @@ type ExportActionsProps = {
 };
 
 export function ExportActions({
-  mode,
   regions,
   runId,
   status,
@@ -39,7 +37,6 @@ export function ExportActions({
     try {
       const report = createJsonReport({
         generatedAt: new Date().toISOString(),
-        mode,
         regions,
         runId,
         status,
@@ -91,9 +88,7 @@ export function ExportActions({
       </button>
       <p id="export-note">
         {!runId
-          ? mode === "sample"
-            ? "Run the featured demo to create an exportable receipt."
-            : "Run a live comparison to create an exportable receipt."
+          ? "Run a live comparison to create an exportable receipt."
           : !enabled
             ? "Available after 2 regional captures succeed."
             : complete
