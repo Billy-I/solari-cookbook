@@ -76,6 +76,7 @@ export default function Page() {
 
         <section aria-label="Run evidence" className="run-evidence">
           <RunReceipt
+            featured={run.value === null}
             mode={evidenceMode}
             status={run.status}
             value={run.value ?? featuredValue}

@@ -102,7 +102,11 @@ function measureFocusContrast(element: Element) {
 
 test("idle sample state has no automated axe violations", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("Ready to compare", { exact: true })).toBeVisible();
+  const runEvidence = page.getByRole("region", { name: "Run evidence" });
+  await expect(
+    runEvidence.getByText("Featured sample", { exact: true }),
+  ).toBeVisible();
+  await expect(runEvidence.getByText("Preview", { exact: true })).toBeVisible();
   await expectAxeClean(page);
 });
 

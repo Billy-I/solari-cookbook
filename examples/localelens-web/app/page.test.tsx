@@ -32,7 +32,7 @@ describe("LocaleLens comparison page", () => {
     ).toHaveLength(3);
     expect(
       within(screen.getByRole("region", { name: "Run evidence" })).getByText(
-        "Sample evidence",
+        "Featured sample",
         { exact: true },
       ),
     ).toBeVisible();
@@ -48,14 +48,36 @@ describe("LocaleLens comparison page", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("labels featured fixtures as sample evidence until a live run starts", () => {
+  it("separates the featured sample preview from the next run controls", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_MODE", "sample");
+    render(<Page />);
+
+    const runEvidence = screen.getByRole("region", { name: "Run evidence" });
+    expect(
+      within(runEvidence).getByText("Featured sample", { exact: true }),
+    ).toBeVisible();
+    expect(
+      within(runEvidence).getByText("Preview", { exact: true }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("checkbox", { name: "United States" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "United Kingdom" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Germany" }),
+    ).not.toBeChecked();
+  });
+
+  it("labels featured fixtures as a preview until a live run starts", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_MODE", "live");
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
     render(<Page />);
 
     expect(
       within(screen.getByRole("region", { name: "Run evidence" })).getByText(
-        "Sample evidence",
+        "Featured sample",
         { exact: true },
       ),
     ).toBeVisible();
@@ -67,7 +89,7 @@ describe("LocaleLens comparison page", () => {
 
     expect(screen.getByText("Live Solari capture", { exact: true })).toBeVisible();
     expect(
-      screen.queryByText("Sample evidence", { exact: true }),
+      screen.queryByText("Featured sample", { exact: true }),
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("Launching browser")).toHaveLength(4);
     expect(
