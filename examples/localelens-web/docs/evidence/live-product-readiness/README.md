@@ -128,8 +128,11 @@ release.
 
 Status: **NOT RUN**.
 
-The shell had no non-empty runtime key, and the only local environment file was
-the placeholder `.env.example`. The provider gate therefore stopped closed.
+The shell had no non-empty runtime key, the only local environment file was
+the placeholder `.env.example`, and a redacted macOS Security.framework query
+found zero generic-password items whose value matched the known Solari key
+prefixes. No credential value or Keychain metadata was printed. The provider
+gate therefore stopped closed.
 Exact live usage in this phase is zero capture calls and zero replay calls.
 There is no new app run ID, provider session set, dashboard count change, or
 dashboard correlation to report.
