@@ -41,9 +41,11 @@ describe("LocaleLens comparison page", () => {
       screen.getByText("Evidence appears as each regional capture settles."),
     ).toBeVisible();
     expect(screen.getByText("Replay availability is temporary.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Download JSON" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Print evidence" })).toBeEnabled();
-    expect(screen.getByText("Complete report: 3 captures succeeded.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Download JSON" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Print evidence" })).toBeDisabled();
+    expect(
+      screen.getByText("Run the featured demo to create an exportable receipt."),
+    ).toBeVisible();
     expect(
       screen.queryByText("Replay unavailable in Phase 1"),
     ).not.toBeInTheDocument();

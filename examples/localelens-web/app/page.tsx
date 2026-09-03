@@ -117,6 +117,7 @@ export default function Page() {
           <ExportActions
             mode={evidenceMode}
             regions={evidenceRegions}
+            runId={run.runId}
             status={evidenceStatus}
             target={(run.value ?? featuredValue).url}
           />

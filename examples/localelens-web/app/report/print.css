@@ -17,6 +17,7 @@
   .how-it-works,
   .run-control,
   .evidence-actions,
+  .run-cancel-row,
   .replay-link,
   .replay-pending,
   .region-preview img {
@@ -34,6 +35,15 @@
   .region-grid {
     display: grid !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .evidence-details > summary {
+    display: none !important;
+  }
+
+  .evidence-details > .details-intro,
+  .evidence-details > .differences-section {
+    display: block !important;
   }
 
   .region-preview {

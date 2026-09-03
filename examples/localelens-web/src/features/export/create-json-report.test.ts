@@ -8,6 +8,8 @@ import type { RegionRunState } from "@/src/features/run/use-comparison-run";
 import { sampleCaptureByCountry } from "@/src/test/fixtures";
 
 const generatedAt = "2026-09-02T08:09:10.000Z";
+const runId = "llr_123e4567-e89b-42d3-a456-426614174000";
+const sessionRef = "sol_0123456789abcdefabcd";
 
 function successfulRegion(
   country: "us" | "de",
@@ -18,6 +20,11 @@ function successfulRegion(
     response: {
       ...sampleCaptureByCountry[country],
       ...additions,
+      receipt: {
+        ...sampleCaptureByCountry[country].receipt,
+        runId,
+        sessionRef,
+      },
       evidence: {
         ...sampleCaptureByCountry[country].evidence,
         finalUrl: `https://user:password@regional.example.test/${country}/pricing?token=temporary#offer`,
@@ -31,6 +38,7 @@ function partialInput(): JsonReportInput {
   return {
     generatedAt,
     mode: "live",
+    runId,
     regions: [
       successfulRegion("us", {
         apiKey: "SECRET-API-KEY",
@@ -39,7 +47,12 @@ function partialInput(): JsonReportInput {
       {
         country: "gb",
         response: {
-          correlation: null,
+          correlation: {
+            runId,
+            country: "gb",
+            attempt: 2,
+            sessionRef,
+          },
           error: {
             code: "SOLARI_CAPACITY",
             message: "Regional capacity was unavailable.",
@@ -64,9 +77,10 @@ describe("createJsonReport", () => {
 
     expect(report).toEqual(
       expect.objectContaining({
-        schemaVersion: 1,
+        schemaVersion: 2,
         generatedAt,
         mode: "live",
+        runId,
         status: "partial",
         target: { hostname: "regional.example.test" },
         countries: ["de", "gb", "us"],
@@ -79,6 +93,12 @@ describe("createJsonReport", () => {
     expect(report.failures).toEqual([
       {
         country: "gb",
+        correlation: {
+          runId,
+          country: "gb",
+          attempt: 2,
+          sessionRef,
+        },
         code: "SOLARI_CAPACITY",
         message: "Regional capacity was unavailable.",
         retryable: true,
@@ -98,6 +118,10 @@ describe("createJsonReport", () => {
       expect.objectContaining({
         country: "de",
         receipt: {
+          runId,
+          country: "de",
+          attempt: 1,
+          sessionRef,
           proxyCountry: "de",
           proxyTier: "residential",
           timezoneId: "Europe/Berlin",
@@ -122,8 +146,34 @@ describe("createJsonReport", () => {
     expect(output.json).not.toContain("SECRET");
     expect(output.json).not.toContain("password");
     expect(output.json).not.toContain("replay.example.test");
+    expect(output.json).not.toContain("sessionId");
+    expect(output.json).not.toContain("raw-provider-session-id");
+    expect(output.json).not.toContain("SOLARI_API_KEY");
     expect(output.json).not.toContain("?token=");
     expect(output.json).not.toContain("#offer");
+  });
+
+  it("keeps sample provenance while omitting provider session references", () => {
+    const output = createJsonReport({
+      generatedAt,
+      mode: "sample",
+      regions: [
+        { country: "us", response: sampleCaptureByCountry.us, stage: "complete" },
+        { country: "gb", response: sampleCaptureByCountry.gb, stage: "complete" },
+      ],
+      runId,
+      status: "complete",
+      target: "https://regional.example.test/pricing",
+    });
+    const report = JSON.parse(output.json);
+
+    expect(report).toMatchObject({ schemaVersion: 2, mode: "sample", runId });
+    expect(
+      report.results.every(
+        ({ receipt }: { receipt: { sessionRef: string | null } }) =>
+          receipt.sessionRef === null,
+      ),
+    ).toBe(true);
   });
 
   it("labels a report complete only when every selected region succeeded", () => {

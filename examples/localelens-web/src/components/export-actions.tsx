@@ -7,6 +7,7 @@ import {
   canExportReport,
   createJsonReport,
 } from "@/src/features/export/create-json-report";
+import type { AppRunId } from "@/src/features/capture/contracts";
 import type {
   ComparisonRun,
   RegionRunState,
@@ -15,6 +16,7 @@ import type {
 type ExportActionsProps = {
   mode: ComparisonRun["mode"];
   regions: RegionRunState[];
+  runId: AppRunId | null;
   status: ComparisonRun["status"];
   target: string;
 };
@@ -22,20 +24,24 @@ type ExportActionsProps = {
 export function ExportActions({
   mode,
   regions,
+  runId,
   status,
   target,
 }: ExportActionsProps) {
   const [error, setError] = useState<string | null>(null);
   const successfulCount = regions.filter(({ response }) => response?.ok).length;
-  const enabled = canExportReport(regions);
+  const enabled = runId !== null && canExportReport(regions);
   const complete = enabled && successfulCount === regions.length && status === "complete";
 
   function downloadJson() {
+    if (!runId) return;
+
     try {
       const report = createJsonReport({
         generatedAt: new Date().toISOString(),
         mode,
         regions,
+        runId,
         status,
         target,
       });
@@ -84,11 +90,13 @@ export function ExportActions({
         Print evidence
       </button>
       <p id="export-note">
-        {!enabled
-          ? "Available after 2 regional captures succeed."
-          : complete
-            ? `Complete report: ${successfulCount} captures succeeded.`
-            : `Partial report: ${successfulCount} of ${regions.length} captures succeeded.`}
+        {!runId
+          ? "Run the featured demo to create an exportable receipt."
+          : !enabled
+            ? "Available after 2 regional captures succeed."
+            : complete
+              ? `Complete report: ${successfulCount} captures succeeded.`
+              : `Partial report: ${successfulCount} of ${regions.length} captures succeeded.`}
       </p>
       {error ? <p className="form-alert" role="alert">{error}</p> : null}
     </div>

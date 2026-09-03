@@ -4,6 +4,8 @@ import {
   type DifferenceRow,
 } from "@/src/features/compare/compare-evidence";
 import type {
+  AppRunId,
+  CaptureCorrelation,
   PageEvidence,
   SafeCaptureErrorCode,
   SupportedCountry,
@@ -24,6 +26,10 @@ type SafeResult = {
   country: SupportedCountry;
   evidence: SafeEvidence;
   receipt: {
+    runId: AppRunId;
+    country: SupportedCountry;
+    attempt: number;
+    sessionRef: string | null;
     proxyCountry: SupportedCountry;
     proxyTier: "residential";
     timezoneId: string | null;
@@ -32,14 +38,16 @@ type SafeResult = {
 
 type SafeFailure = {
   country: SupportedCountry;
+  correlation: CaptureCorrelation | null;
   code: SafeCaptureErrorCode;
   message: string;
   retryable: boolean;
 };
 
 type JsonReport = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   generatedAt: string;
+  runId: AppRunId;
   mode: ComparisonRun["mode"];
   status: "complete" | "partial";
   target: { hostname: string };
@@ -54,6 +62,7 @@ export type JsonReportInput = {
   generatedAt: string;
   mode: ComparisonRun["mode"];
   regions: RegionRunState[];
+  runId: AppRunId;
   status: ComparisonRun["status"];
   target: string;
 };
@@ -93,6 +102,27 @@ function safeEvidence(evidence: PageEvidence): SafeEvidence {
     consentText: evidence.consentText,
     httpStatus: evidence.httpStatus,
     capturedAt: evidence.capturedAt,
+  };
+}
+
+function safeCorrelation(
+  correlation: CaptureCorrelation | null,
+  runId: AppRunId,
+  country: SupportedCountry,
+): CaptureCorrelation | null {
+  if (
+    !correlation ||
+    correlation.runId !== runId ||
+    correlation.country !== country
+  ) {
+    return null;
+  }
+
+  return {
+    runId: correlation.runId,
+    country: correlation.country,
+    attempt: correlation.attempt,
+    sessionRef: correlation.sessionRef,
   };
 }
 
@@ -150,6 +180,10 @@ export function createJsonReport(input: JsonReportInput): JsonReportOutput {
         country: region.country,
         evidence: safeEvidence(region.response.evidence),
         receipt: {
+          runId: input.runId,
+          country: region.country,
+          attempt: region.response.receipt.attempt,
+          sessionRef: region.response.receipt.sessionRef,
           proxyCountry: region.response.receipt.proxyCountry,
           proxyTier: region.response.receipt.proxyTier,
           timezoneId: region.response.receipt.timezoneId,
@@ -158,6 +192,11 @@ export function createJsonReport(input: JsonReportInput): JsonReportOutput {
     } else {
       failures.push({
         country: region.country,
+        correlation: safeCorrelation(
+          region.response.correlation,
+          input.runId,
+          region.country,
+        ),
         code: region.response.error.code,
         message: region.response.error.message,
         retryable: region.response.error.retryable,
@@ -166,8 +205,9 @@ export function createJsonReport(input: JsonReportInput): JsonReportOutput {
   }
 
   const report: JsonReport = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt,
+    runId: input.runId,
     mode: input.mode,
     status:
       input.status === "complete" && results.length === sortedRegions.length

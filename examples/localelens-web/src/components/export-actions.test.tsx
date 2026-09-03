@@ -23,6 +23,7 @@ describe("ExportActions", () => {
       <ExportActions
         mode="live"
         regions={completeRegions.slice(0, 1)}
+        runId="llr_123e4567-e89b-42d3-a456-426614174000"
         status="partial"
         target="https://regional.example.test/pricing"
       />,
@@ -31,6 +32,24 @@ describe("ExportActions", () => {
     expect(screen.getByRole("button", { name: "Download JSON" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Print evidence" })).toBeDisabled();
     expect(screen.getByText("Available after 2 regional captures succeed.")).toBeVisible();
+  });
+
+  it("keeps preview exports disabled until a run receipt exists", () => {
+    render(
+      <ExportActions
+        mode="sample"
+        regions={completeRegions}
+        runId={null}
+        status="complete"
+        target="https://regional.example.test/pricing"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Download JSON" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Print evidence" })).toBeDisabled();
+    expect(
+      screen.getByText("Run the featured demo to create an exportable receipt."),
+    ).toBeVisible();
   });
 
   it("exports an honest partial report after two successes and revokes its object URL", () => {
@@ -73,6 +92,7 @@ describe("ExportActions", () => {
       <ExportActions
         mode="live"
         regions={regions}
+        runId="llr_123e4567-e89b-42d3-a456-426614174000"
         status="partial"
         target="https://regional.example.test/pricing"
       />,
@@ -101,6 +121,7 @@ describe("ExportActions", () => {
       <ExportActions
         mode="sample"
         regions={completeRegions.slice(0, 2)}
+        runId="llr_123e4567-e89b-42d3-a456-426614174000"
         status="complete"
         target="https://regional.example.test/pricing"
       />,
