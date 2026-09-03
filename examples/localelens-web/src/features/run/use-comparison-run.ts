@@ -375,12 +375,12 @@ export function useComparisonRun(
           type: "batch",
         });
       },
-      failed(country, error) {
+      failed(country, error, correlation) {
         if (currentOperationIdsRef.current.get(country) !== operationId) return;
         dispatch({
           country,
           operationId,
-          response: { correlation: null, error, ok: false },
+          response: { correlation: correlation ?? null, error, ok: false },
           stage: "failed",
           type: "advance",
         });

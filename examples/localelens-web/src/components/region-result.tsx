@@ -1,21 +1,16 @@
 import Image from "next/image";
 import { CircleDashed, RotateCcw, TriangleAlert } from "lucide-react";
 
-import type { SupportedCountry } from "@/src/features/capture/contracts";
+import type {
+  CaptureCorrelation,
+  SupportedCountry,
+} from "@/src/features/capture/contracts";
+import { COUNTRY_NAMES } from "@/src/features/capture/countries";
 import type {
   ComparisonRun,
   RegionRunState,
 } from "@/src/features/run/use-comparison-run";
 import { ReplayLink } from "@/src/components/replay-link";
-
-const countryNames: Record<SupportedCountry, string> = {
-  us: "United States",
-  gb: "United Kingdom",
-  de: "Germany",
-  fr: "France",
-  jp: "Japan",
-  au: "Australia",
-};
 
 const sampleImages: Partial<Record<SupportedCountry, string>> = {
   us: "/sample/us.jpg",
@@ -66,7 +61,7 @@ type RegionResultProps = {
 };
 
 export function RegionResult({ mode, region, onRetry }: RegionResultProps) {
-  const countryName = countryNames[region.country];
+  const countryName = COUNTRY_NAMES[region.country];
 
   if (!region.response) {
     return (
@@ -102,6 +97,11 @@ export function RegionResult({ mode, region, onRetry }: RegionResultProps) {
         </p>
         <p className="error-code">{region.response.error.code}</p>
         <p>{region.response.error.message}</p>
+        {region.response.correlation ? (
+          <p className="session-reference">
+            Solari reference {region.response.correlation.sessionRef}
+          </p>
+        ) : null}
         {region.response.error.retryable ? (
           <button
             className="secondary-action"
@@ -123,6 +123,15 @@ export function RegionResult({ mode, region, onRetry }: RegionResultProps) {
     ? sampleImages[region.country]
     : undefined;
   const liveImage = `data:image/jpeg;base64,${region.response.screenshot.base64}`;
+  const correlation: CaptureCorrelation | null =
+    region.response.receipt.sessionRef === null
+      ? null
+      : {
+          runId: region.response.receipt.runId,
+          country: region.response.receipt.country,
+          attempt: region.response.receipt.attempt,
+          sessionRef: region.response.receipt.sessionRef,
+        };
 
   return (
     <article
@@ -181,8 +190,11 @@ export function RegionResult({ mode, region, onRetry }: RegionResultProps) {
         </div>
       </dl>
       <p className="capture-time">Captured {capturedAt}</p>
-      {mode === "live" ? (
-        <ReplayLink sessionId={region.response.receipt.sessionId} />
+      {mode === "live" && correlation ? (
+        <>
+          <p className="session-reference">{correlation.sessionRef}</p>
+          <ReplayLink correlation={correlation} />
+        </>
       ) : null}
     </article>
   );

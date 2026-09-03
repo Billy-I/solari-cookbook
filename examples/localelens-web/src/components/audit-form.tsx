@@ -3,19 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  COUNTRY_NAMES,
   SUPPORTED_COUNTRIES,
   type SupportedCountry,
 } from "@/src/features/capture/countries";
 import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
-
-const countryNames: Record<SupportedCountry, string> = {
-  us: "United States",
-  gb: "United Kingdom",
-  de: "Germany",
-  fr: "France",
-  jp: "Japan",
-  au: "Australia",
-};
 
 const defaultCountries: SupportedCountry[] = ["us", "gb"];
 const defaultUrl = "https://regional.example.test/pricing";
@@ -56,7 +48,8 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
       const isSelected = current.includes(country);
       if (
         (isSelected && current.length === 2) ||
-        (!isSelected && current.length === CAPTURE_LIMITS.maxCountries)
+        (!isSelected &&
+          current.length === CAPTURE_LIMITS.maxSelectedCountries)
       ) {
         return current;
       }
@@ -110,19 +103,20 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
             const selected = countries.includes(country);
             const atMinimum = selected && countries.length === 2;
             const atMaximum =
-              !selected && countries.length === CAPTURE_LIMITS.maxCountries;
+              !selected &&
+              countries.length === CAPTURE_LIMITS.maxSelectedCountries;
 
             return (
               <label className="country-option" key={country}>
                 <input
-                  aria-label={countryNames[country]}
+                  aria-label={COUNTRY_NAMES[country]}
                   checked={selected}
                   disabled={busy || atMinimum || atMaximum}
                   onChange={() => toggleCountry(country)}
                   type="checkbox"
                 />
                 <span className="country-code">{country.toUpperCase()}</span>
-                <span>{countryNames[country]}</span>
+                <span>{COUNTRY_NAMES[country]}</span>
               </label>
             );
           })}

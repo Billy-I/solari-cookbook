@@ -5,6 +5,18 @@ import {
   type CaptureDependencies,
 } from "@/src/features/capture/capture-region";
 
+const runId = "llr_123e4567-e89b-42d3-a456-426614174000";
+const correlation = {
+  runId,
+  country: "us" as const,
+  attempt: 1,
+  sessionRef: "sol_dab46ee6c619545d0534",
+};
+
+function captureRequest(url = "https://example.com/") {
+  return { url, country: "us" as const, runId, attempt: 1 };
+}
+
 const extractedEvidence = {
   finalUrl: "https://example.com/",
   title: "Example Domain",
@@ -56,7 +68,7 @@ function createLifecycle(failureStage?: FailureStage) {
     mainFrame: vi.fn(() => mainFrame),
   };
   const browser = {
-    id: "session-safe-id",
+    id: "raw-provider-session-id",
     proxy: {
       country: "us",
       tier: "residential" as const,
@@ -80,12 +92,23 @@ function createLifecycle(failureStage?: FailureStage) {
       events.push("client:close");
     }),
   };
+  const registerSession = vi.fn((input) => {
+    events.push("register-session");
+    expect(input).toEqual({
+      runId,
+      country: "us",
+      attempt: 1,
+      sessionId: "raw-provider-session-id",
+    });
+    return correlation;
+  });
   const dependencies: CaptureDependencies = {
     createClient: () => {
       events.push("client:create");
       return client;
     },
     now: () => new Date("2026-09-01T18:00:00.000Z"),
+    registerSession,
     resolveHost: async (hostname) => {
       events.push(`resolve:${hostname}`);
       return ["93.184.216.34"];
@@ -100,6 +123,7 @@ function createLifecycle(failureStage?: FailureStage) {
     getNavigationHandler: () => navigationHandler,
     mainFrame,
     page,
+    registerSession,
   };
 }
 
@@ -108,7 +132,7 @@ describe("captureRegion", () => {
     const lifecycle = createLifecycle();
 
     const result = await captureRegion(
-      { url: "https://example.com/", country: "us" },
+      captureRequest(),
       lifecycle.dependencies,
     );
 
@@ -133,10 +157,12 @@ describe("captureRegion", () => {
       },
       receipt: {
         country: "us",
+        runId,
+        attempt: 1,
+        sessionRef: correlation.sessionRef,
         proxyCountry: "us",
         proxyTier: "residential",
         timezoneId: "America/New_York",
-        sessionId: "session-safe-id",
         recordingRequested: true,
       },
       screenshot: {
@@ -149,6 +175,7 @@ describe("captureRegion", () => {
       "resolve:example.com",
       "client:create",
       "launch",
+      "register-session",
       "new-page",
       "viewport:1280x900",
       "route",
@@ -160,6 +187,8 @@ describe("captureRegion", () => {
       "browser:close",
       "client:close",
     ]);
+    expect(JSON.stringify(result)).not.toContain("raw-provider-session-id");
+    expect(lifecycle.registerSession).toHaveBeenCalledOnce();
   });
 
   it("aborts a top-level redirect to a private destination", async () => {
@@ -180,7 +209,7 @@ describe("captureRegion", () => {
     });
 
     const result = await captureRegion(
-      { url: "https://example.com/", country: "us" },
+      captureRequest(),
       lifecycle.dependencies,
     );
 
@@ -198,7 +227,7 @@ describe("captureRegion", () => {
     lifecycle.dependencies.resolveHost = async () => ["10.0.0.1"];
 
     const result = await captureRegion(
-      { url: "https://internal.example/", country: "us" },
+      captureRequest("https://internal.example/"),
       lifecycle.dependencies,
     );
 
@@ -208,13 +237,14 @@ describe("captureRegion", () => {
     });
     expect(lifecycle.client.launch).not.toHaveBeenCalled();
     expect(lifecycle.client.close).not.toHaveBeenCalled();
+    expect(lifecycle.registerSession).not.toHaveBeenCalled();
   });
 
   it("closes the client when launch fails without retrying", async () => {
     const lifecycle = createLifecycle("launch");
 
     const result = await captureRegion(
-      { url: "https://example.com/", country: "us" },
+      captureRequest(),
       lifecycle.dependencies,
     );
 
@@ -222,6 +252,7 @@ describe("captureRegion", () => {
     expect(lifecycle.client.launch).toHaveBeenCalledOnce();
     expect(lifecycle.browser.close).not.toHaveBeenCalled();
     expect(lifecycle.client.close).toHaveBeenCalledOnce();
+    expect(lifecycle.registerSession).not.toHaveBeenCalled();
   });
 
   it.each(["navigation", "extraction", "screenshot"] as const)(
@@ -230,11 +261,11 @@ describe("captureRegion", () => {
       const lifecycle = createLifecycle(failureStage);
 
       const result = await captureRegion(
-        { url: "https://example.com/", country: "us" },
+        captureRequest(),
         lifecycle.dependencies,
       );
 
-      expect(result.ok).toBe(false);
+      expect(result).toMatchObject({ ok: false, correlation });
       expect(lifecycle.browser.close).toHaveBeenCalledOnce();
       expect(lifecycle.client.close).toHaveBeenCalledOnce();
     },
@@ -245,7 +276,7 @@ describe("captureRegion", () => {
     lifecycle.browser.proxy.country = "gb";
 
     const result = await captureRegion(
-      { url: "https://example.com/", country: "us" },
+      captureRequest(),
       lifecycle.dependencies,
     );
 
@@ -262,7 +293,7 @@ describe("captureRegion", () => {
     lifecycle.page.screenshot.mockResolvedValueOnce(new Uint8Array(1_500_000));
 
     const atLimit = await captureRegion(
-      { url: "https://example.com/", country: "us" },
+      captureRequest(),
       lifecycle.dependencies,
     );
 
@@ -271,7 +302,7 @@ describe("captureRegion", () => {
     const oneByteOver = createLifecycle();
     oneByteOver.page.screenshot.mockResolvedValueOnce(new Uint8Array(1_500_001));
     const result = await captureRegion(
-      { url: "https://example.com/", country: "us" },
+      captureRequest(),
       oneByteOver.dependencies,
     );
 
@@ -292,7 +323,7 @@ describe("captureRegion", () => {
     lifecycle.dependencies.requestId = "request-safe-id";
 
     const result = await captureRegion(
-      { url: "https://example.com/", country: "us" },
+      captureRequest(),
       lifecycle.dependencies,
     );
 
@@ -315,7 +346,7 @@ describe("captureRegion", () => {
     lifecycle.browser.close.mockRejectedValueOnce(new Error("cleanup secret"));
 
     const result = await captureRegion(
-      { url: "https://example.com/", country: "us" },
+      captureRequest(),
       lifecycle.dependencies,
     );
 
@@ -351,7 +382,7 @@ describe("captureRegion", () => {
         }
 
         const resultPromise = captureRegion(
-          { url: "https://example.com/", country: "us" },
+          captureRequest(),
           lifecycle.dependencies,
         );
         await vi.advanceTimersByTimeAsync(100);
@@ -392,7 +423,7 @@ describe("captureRegion", () => {
       );
 
       const resultPromise = captureRegion(
-        { url: "https://example.com/", country: "us" },
+        captureRequest(),
         lifecycle.dependencies,
       );
       await vi.advanceTimersByTimeAsync(100);
@@ -438,7 +469,7 @@ describe("captureRegion", () => {
       lifecycle.browser.close.mockRejectedValueOnce(new Error("session secret"));
 
       const resultPromise = captureRegion(
-        { url: "https://example.com/", country: "us" },
+        captureRequest(),
         lifecycle.dependencies,
       );
       await vi.advanceTimersByTimeAsync(100);
@@ -478,7 +509,7 @@ describe("captureRegion", () => {
         .mockRejectedValueOnce(new Error("client secret"));
 
       const resultPromise = captureRegion(
-        { url: "https://example.com/", country: "us" },
+        captureRequest(),
         lifecycle.dependencies,
       );
       await vi.advanceTimersByTimeAsync(100);
@@ -511,7 +542,7 @@ describe("captureRegion", () => {
       lifecycle.client.close.mockImplementationOnce(async () => new Promise(() => {}));
 
       const resultPromise = captureRegion(
-        { url: "https://example.com/", country: "us" },
+        captureRequest(),
         lifecycle.dependencies,
       );
       await vi.advanceTimersByTimeAsync(50);

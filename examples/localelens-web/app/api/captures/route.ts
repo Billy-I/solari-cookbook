@@ -7,6 +7,7 @@ import {
   type SafeCaptureErrorCode,
 } from "@/src/features/capture/contracts";
 import { toSafeCaptureFailure } from "@/src/features/capture/safe-error";
+import { registerRunSession } from "@/src/features/capture/run-session-registry";
 import { createSolariClient } from "@/src/lib/solari";
 import { logServerEvent } from "@/src/lib/server-observability";
 
@@ -137,11 +138,21 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
+    const requestId = crypto.randomUUID();
     const result = await captureRegion(parsedRequest.data, {
       createClient: createSolariClient,
       now: () => new Date(),
-      requestId: crypto.randomUUID(),
-      log: ({ category, requestId }) => logServerEvent(category, requestId),
+      requestId,
+      log: (event) => logServerEvent(event),
+      registerSession(input) {
+        const correlation = registerRunSession(input);
+        logServerEvent({
+          category: "session_registered",
+          requestId,
+          ...correlation,
+        });
+        return correlation;
+      },
     });
     return json(result, result.ok ? 200 : failureStatus(result.error.code));
   } catch (error) {

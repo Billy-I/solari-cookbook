@@ -32,11 +32,13 @@ function success(overrides: Partial<PageEvidence> = {}): CaptureResponse {
     ok: true,
     evidence: evidence(overrides),
     receipt: {
+      runId: "llr_123e4567-e89b-42d3-a456-426614174000",
       country: "gb",
+      attempt: 1,
+      sessionRef: null,
       proxyCountry: "gb",
       proxyTier: "residential",
       timezoneId: "Europe/London",
-      sessionId: "test-session",
       recordingRequested: true,
     },
     screenshot: {
@@ -50,6 +52,7 @@ function success(overrides: Partial<PageEvidence> = {}): CaptureResponse {
 function failed(): CaptureResponse {
   return {
     ok: false,
+    correlation: null,
     error: {
       code: "CAPTURE_FAILED",
       message: "Capture failed safely",

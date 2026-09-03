@@ -373,19 +373,20 @@ git commit -m "feat: batch regional captures deterministically"
 
 **Interfaces:**
 - Consumes: `CaptureCorrelation`, strict `runId/country/attempt` requests, and `browser.id` inside the server capture boundary.
-- Produces: `registerRunSession()`, `lookupRunSession()`, `resetRunSessionRegistryForTests()`, allowlisted correlation logs, correlation-only replay requests, and zero raw session IDs in client response data.
+- Produces: `createRunSessionRegistry()`, `registerRunSession()`, `lookupRunSession()`, allowlisted correlation logs, correlation-only replay requests, and zero raw session IDs in client response data.
 
 - [ ] **Step 1: Write failing registry tests**
 
-Use fixed IDs and a controllable clock:
+Use a fresh registry with fixed IDs and a controllable clock:
 
 ```ts
-const correlation = registerRunSession({
+const registry = createRunSessionRegistry({ now: () => 1_000 });
+const correlation = registry.register({
   runId: "llr_123e4567-e89b-42d3-a456-426614174000",
   country: "fr",
   attempt: 1,
   sessionId: "raw-provider-session-id",
-}, { now: () => 1_000 });
+});
 
 expect(correlation).toMatchObject({
   country: "fr",
@@ -393,13 +394,13 @@ expect(correlation).toMatchObject({
   sessionRef: expect.stringMatching(/^sol_[0-9a-f]{20}$/),
 });
 expect(JSON.stringify(correlation)).not.toContain("raw-provider-session-id");
-expect(lookupRunSession(correlation, { now: () => 1_001 }))
+expect(registry.lookup(correlation))
   .toBe("raw-provider-session-id");
 expect(lookupRunSession(correlation, { now: () => 3_601_001 }))
   .toBeNull();
 ```
 
-Register 101 unique run IDs and assert the oldest run is evicted while the newest 100 remain. Reset the registry in `beforeEach` and `afterEach`.
+Register 101 unique run IDs in the fresh registry and assert the oldest run is evicted while the newest 100 remain. Do not add a production cleanup method that exists only for tests.
 
 - [ ] **Step 2: Run the registry test and verify RED**
 
@@ -411,7 +412,7 @@ Expected: FAIL because the server registry does not exist.
 
 - [ ] **Step 3: Implement the bounded server registry**
 
-Start the module with `import "server-only"`. Use Node `createHash("sha256")`, expose the first twenty lowercase hex characters as `sol_<digest>`, and store the raw ID only in a `Map` held on `globalThis[Symbol.for("localelens.run-session-registry")]`. Group entries by run ID, prune records older than 3,600,000 ms on every lookup and registration, and evict the oldest run when the run count exceeds 100. `lookupRunSession` must compare `runId`, `country`, `attempt`, and `sessionRef` before returning the raw ID.
+The app does not install the standalone `server-only` marker package, so do not add that dependency. Keep this module server-bound by importing it only from Node route and capture modules. Use Node `createHash("sha256")`, expose the first twenty lowercase hex characters as `sol_<digest>`, and store the raw ID only in a `Map` held on `globalThis[Symbol.for("localelens.run-session-registry")]`. Group entries by run ID, prune records older than 3,600,000 ms on every lookup and registration, and evict the oldest run when the run count exceeds 100. `lookupRunSession` must compare `runId`, `country`, `attempt`, and `sessionRef` before returning the raw ID.
 
 - [ ] **Step 4: Write failing capture and route correlation tests**
 

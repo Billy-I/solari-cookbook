@@ -33,6 +33,10 @@ describe("RegionResult", () => {
       stage: "complete",
       response: {
         ...sampleCaptureByCountry.us,
+        receipt: {
+          ...sampleCaptureByCountry.us.receipt,
+          sessionRef: "sol_dab46ee6c619545d0534",
+        },
         screenshot: {
           ...sampleCaptureByCountry.us.screenshot,
           base64: "bGl2ZS1qcGVn",
@@ -47,6 +51,7 @@ describe("RegionResult", () => {
       "data:image/jpeg;base64,bGl2ZS1qcGVn",
     );
     expect(screen.getByText("Live evidence")).toBeVisible();
+    expect(screen.getByText("sol_dab46ee6c619545d0534")).toBeVisible();
   });
 
   it("renders null consent as not detected", () => {
@@ -75,6 +80,7 @@ describe("RegionResult", () => {
       stage: "failed",
       response: {
         ok: false,
+        correlation: null,
         error: {
           code: "CAPTURE_FAILED",
           message: "Sample capture was unavailable.",

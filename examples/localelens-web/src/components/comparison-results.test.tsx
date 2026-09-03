@@ -42,6 +42,7 @@ describe("ComparisonResults", () => {
         stage: "failed",
         response: {
           ok: false,
+          correlation: null,
           error: {
             code: "CAPTURE_FAILED",
             message: "Capture was unavailable.",

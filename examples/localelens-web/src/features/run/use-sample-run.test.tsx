@@ -17,6 +17,7 @@ const value: AuditFormValue = {
 
 const safeFailure: CaptureFailure = {
   ok: false,
+  correlation: null,
   error: {
     code: "CAPTURE_FAILED",
     message: "Sample capture was unavailable. No provider detail was exposed.",

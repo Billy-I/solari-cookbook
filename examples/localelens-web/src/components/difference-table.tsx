@@ -6,20 +6,14 @@ import {
 } from "lucide-react";
 import { Fragment } from "react";
 
-import type { SupportedCountry } from "@/src/features/capture/contracts";
+import {
+  COUNTRY_NAMES,
+  type SupportedCountry,
+} from "@/src/features/capture/countries";
 import type {
   DifferenceKind,
   DifferenceRow,
 } from "@/src/features/compare/compare-evidence";
-
-const countryNames: Record<SupportedCountry, string> = {
-  us: "United States",
-  gb: "United Kingdom",
-  de: "Germany",
-  fr: "France",
-  jp: "Japan",
-  au: "Australia",
-};
 
 const fieldLabels: Record<DifferenceRow["field"], string> = {
   final_url: "Final URL",
@@ -79,7 +73,7 @@ export function DifferenceTable({ countries, fields }: DifferenceTableProps) {
               </th>
               {countries.map((country) => (
                 <th id={`country-${country}`} key={country} scope="col">
-                  {countryNames[country]}
+                  {COUNTRY_NAMES[country]}
                 </th>
               ))}
               <th id="comparison-column" scope="col">
@@ -97,7 +91,7 @@ export function DifferenceTable({ countries, fields }: DifferenceTableProps) {
                   const value = valueFor(row, country);
                   return (
                     <td
-                      aria-label={`${countryNames[country]}: ${value}`}
+                      aria-label={`${COUNTRY_NAMES[country]}: ${value}`}
                       headers={`field-${row.field} country-${country}`}
                       key={country}
                     >
@@ -125,7 +119,7 @@ export function DifferenceTable({ countries, fields }: DifferenceTableProps) {
               <dl aria-label={`${fieldLabels[row.field]} comparison by market`}>
                 {countries.map((country) => (
                   <Fragment key={country}>
-                    <dt>{countryNames[country]}</dt>
+                    <dt>{COUNTRY_NAMES[country]}</dt>
                     <dd>{valueFor(row, country)}</dd>
                   </Fragment>
                 ))}

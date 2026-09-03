@@ -28,7 +28,11 @@ export type RunEvents = {
   batchStarted(batch: number, totalBatches: number): void;
   started(country: SupportedCountry): void;
   succeeded(country: SupportedCountry, response: CaptureResponse): void;
-  failed(country: SupportedCountry, error: PublicCaptureError): void;
+  failed(
+    country: SupportedCountry,
+    error: PublicCaptureError,
+    correlation?: CaptureCorrelation,
+  ): void;
 };
 
 function safeError(
@@ -354,7 +358,11 @@ async function runCountryRequest(
 
   let outcome:
     | { type: "succeeded"; response: CaptureResponse }
-    | { type: "failed"; error: PublicCaptureError };
+    | {
+        type: "failed";
+        error: PublicCaptureError;
+        correlation: CaptureCorrelation | null;
+      };
 
   try {
     const { response, body } = await settleRequest(
@@ -379,7 +387,8 @@ async function runCountryRequest(
       parsed.receipt.country === country &&
       parsed.receipt.proxyCountry === country &&
       parsed.receipt.runId === context.runId &&
-      parsed.receipt.attempt === context.attempt
+      parsed.receipt.attempt === context.attempt &&
+      parsed.receipt.sessionRef !== null
     ) {
       outcome = { type: "succeeded", response: parsed };
     } else if (
@@ -391,6 +400,7 @@ async function runCountryRequest(
       outcome = {
         type: "failed",
         error: safeError("SOLARI_PROXY_MISMATCH"),
+        correlation: null,
       };
     } else {
       outcome = {
@@ -399,6 +409,14 @@ async function runCountryRequest(
           parsed && !parsed.ok
             ? parsed.error
             : safeError("CAPTURE_FAILED"),
+        correlation:
+          parsed &&
+          !parsed.ok &&
+          parsed.correlation?.runId === context.runId &&
+          parsed.correlation.country === country &&
+          parsed.correlation.attempt === context.attempt
+            ? parsed.correlation
+            : null,
       };
     }
   } catch (error) {
@@ -411,11 +429,16 @@ async function runCountryRequest(
           error.message === "SOLARI_CAPACITY")
           ? safeError(error.message)
           : safeError("CAPTURE_FAILED"),
+      correlation: null,
     };
   }
 
   if (outcome.type === "succeeded") events.succeeded(country, outcome.response);
-  else events.failed(country, outcome.error);
+  else if (outcome.correlation) {
+    events.failed(country, outcome.error, outcome.correlation);
+  } else {
+    events.failed(country, outcome.error);
+  }
 }
 
 export async function runCountryCapture(

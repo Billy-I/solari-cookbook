@@ -57,6 +57,7 @@ describe("ExportActions", () => {
       {
         country: "de",
         response: {
+          correlation: null,
           error: {
             code: "SOLARI_CAPACITY",
             message: "Regional capacity was unavailable.",

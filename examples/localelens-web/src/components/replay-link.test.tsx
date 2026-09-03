@@ -4,19 +4,26 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ReplayLink } from "@/src/components/replay-link";
 
+const correlation = {
+  runId: "llr_123e4567-e89b-42d3-a456-426614174000",
+  country: "us" as const,
+  attempt: 1,
+  sessionRef: "sol_dab46ee6c619545d0534",
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("ReplayLink", () => {
-  it("keeps a pending replay non-clickable and performs one lookup per session", async () => {
+  it("keeps a pending replay non-clickable and performs one safe correlation lookup", async () => {
     const fetchReplay = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ status: "pending" }), { status: 202 }),
     );
     vi.stubGlobal("fetch", fetchReplay);
     const { rerender } = render(
       <StrictMode>
-        <ReplayLink sessionId="capture-session-001" />
+        <ReplayLink correlation={correlation} />
       </StrictMode>,
     );
 
@@ -24,11 +31,18 @@ describe("ReplayLink", () => {
     expect(screen.queryByRole("link", { name: /replay/i })).not.toBeInTheDocument();
     rerender(
       <StrictMode>
-        <ReplayLink sessionId="capture-session-001" />
+        <ReplayLink correlation={correlation} />
       </StrictMode>,
     );
 
     await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(1));
+    expect(fetchReplay).toHaveBeenCalledWith(
+      "/api/replays/sol_dab46ee6c619545d0534?runId=llr_123e4567-e89b-42d3-a456-426614174000&country=us&attempt=1",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(JSON.stringify(fetchReplay.mock.calls)).not.toContain(
+      "raw-provider-session-id",
+    );
   });
 
   it("re-checks a pending replay only when the user asks and can become ready", async () => {
@@ -48,7 +62,7 @@ describe("ReplayLink", () => {
       );
     vi.stubGlobal("fetch", fetchReplay);
 
-    render(<ReplayLink sessionId="capture-session-006" />);
+    render(<ReplayLink correlation={correlation} />);
 
     const recheck = await screen.findByRole("button", { name: "Re-check replay" });
     expect(screen.queryByRole("link", { name: /replay/i })).not.toBeInTheDocument();
@@ -69,7 +83,7 @@ describe("ReplayLink", () => {
       );
     vi.stubGlobal("fetch", fetchReplay);
 
-    render(<ReplayLink sessionId="capture-session-007" />);
+    render(<ReplayLink correlation={correlation} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Re-check replay" }));
     expect(await screen.findByText("Replay unavailable")).toBeVisible();
@@ -90,7 +104,7 @@ describe("ReplayLink", () => {
 
     render(
       <StrictMode>
-        <ReplayLink sessionId="capture-session-002" />
+        <ReplayLink correlation={correlation} />
       </StrictMode>,
     );
 
@@ -117,7 +131,7 @@ describe("ReplayLink", () => {
 
     render(
       <StrictMode>
-        <ReplayLink sessionId="capture-session-003" />
+        <ReplayLink correlation={correlation} />
       </StrictMode>,
     );
 
@@ -137,7 +151,7 @@ describe("ReplayLink", () => {
       ),
     );
 
-    render(<ReplayLink sessionId="capture-session-004" />);
+    render(<ReplayLink correlation={correlation} />);
 
     expect(await screen.findByText("Replay unavailable")).toBeVisible();
   });
@@ -150,7 +164,7 @@ describe("ReplayLink", () => {
     });
     vi.stubGlobal("fetch", fetchReplay);
 
-    const { unmount } = render(<ReplayLink sessionId="capture-session-005" />);
+    const { unmount } = render(<ReplayLink correlation={correlation} />);
     await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(1));
     unmount();
 

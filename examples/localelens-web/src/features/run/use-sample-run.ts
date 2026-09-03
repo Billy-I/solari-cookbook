@@ -46,6 +46,7 @@ const inProgressStages: CaptureStage[] = [
 
 const unavailableFixture: CaptureFailure = {
   ok: false,
+  correlation: null,
   error: {
     code: "CAPTURE_FAILED",
     message: "Sample evidence is unavailable for this market.",

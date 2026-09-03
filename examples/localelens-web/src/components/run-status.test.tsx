@@ -12,6 +12,7 @@ const regions: RegionRunState[] = [
     stage: "failed",
     response: {
       ok: false,
+      correlation: null,
       error: {
         code: "CAPTURE_FAILED",
         message: "Sample capture was unavailable.",

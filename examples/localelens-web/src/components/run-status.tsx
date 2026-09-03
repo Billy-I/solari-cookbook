@@ -1,14 +1,6 @@
-import type { CaptureStage, SupportedCountry } from "@/src/features/capture/contracts";
+import type { CaptureStage } from "@/src/features/capture/contracts";
+import { COUNTRY_NAMES } from "@/src/features/capture/countries";
 import type { RegionRunState } from "@/src/features/run/use-comparison-run";
-
-const countryNames: Record<SupportedCountry, string> = {
-  us: "United States",
-  gb: "United Kingdom",
-  de: "Germany",
-  fr: "France",
-  jp: "Japan",
-  au: "Australia",
-};
 
 const stageLabels: Record<CaptureStage, string> = {
   queued: "Queued",
@@ -18,6 +10,7 @@ const stageLabels: Record<CaptureStage, string> = {
   closing: "Closing session",
   complete: "Complete",
   failed: "Failed",
+  cancelled: "Cancelled",
 };
 
 type RunStatusProps = {
@@ -41,7 +34,7 @@ export function RunStatus({ regions }: RunStatusProps) {
         {regions.map((region) => (
           <li key={region.country}>
             <strong>{region.country.toUpperCase()}</strong>
-            <span>{countryNames[region.country]}</span>
+            <span>{COUNTRY_NAMES[region.country]}</span>
             <span className={`stage-label stage-${region.stage}`}>
               {stageLabels[region.stage]}
             </span>

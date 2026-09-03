@@ -1,10 +1,14 @@
 import { createSolariClient } from "@/src/lib/solari";
 import { logServerEvent } from "@/src/lib/server-observability";
+import {
+  captureCorrelationSchema,
+} from "@/src/features/capture/contracts";
+import { lookupRunSession } from "@/src/features/capture/run-session-registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const replayIdPattern = /^[A-Za-z0-9_.:-]{6,500}$/;
+const replayIdPattern = /^sol_[0-9a-f]{20}$/;
 const maxReplayUrlLength = 4_096;
 const noStoreHeaders = { "Cache-Control": "no-store" };
 const allowedMethodHeaders = {
@@ -42,7 +46,7 @@ function errorStatus(error: unknown): number | undefined {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: ReplayContext,
 ): Promise<Response> {
   if (process.env.LIVE_CAPTURE_ENABLED !== "true") {
@@ -58,6 +62,23 @@ export async function GET(
     return json({ status: "unavailable" }, 400);
   }
 
+  const requestUrl = new URL(request.url);
+  const attempt = requestUrl.searchParams.get("attempt");
+  const parsedCorrelation = captureCorrelationSchema.safeParse({
+    runId: requestUrl.searchParams.get("runId"),
+    country: requestUrl.searchParams.get("country"),
+    attempt: attempt !== null && /^\d+$/.test(attempt) ? Number(attempt) : null,
+    sessionRef: id,
+  });
+  if (!parsedCorrelation.success) {
+    return json({ status: "unavailable" }, 400);
+  }
+
+  const providerSessionId = lookupRunSession(parsedCorrelation.data);
+  if (!providerSessionId) {
+    return json({ status: "unavailable" }, 404);
+  }
+
   let client: ReturnType<typeof createSolariClient> | undefined;
   const requestId = crypto.randomUUID();
   let response: Response;
@@ -65,7 +86,7 @@ export async function GET(
   try {
     try {
       client = createSolariClient();
-      const replay = await client.sessions.getReplayUrl(id);
+      const replay = await client.sessions.getReplayUrl(providerSessionId);
       if (
         typeof replay.url !== "string" ||
         replay.url.length > maxReplayUrlLength
@@ -98,7 +119,10 @@ export async function GET(
         await client.close();
       } catch {
         cleanupFailed = true;
-        logServerEvent("replay_client_cleanup_failed", requestId);
+        logServerEvent({
+          category: "replay_client_cleanup_failed",
+          requestId,
+        });
       }
     }
   }

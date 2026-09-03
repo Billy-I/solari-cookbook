@@ -39,6 +39,7 @@ function partialInput(): JsonReportInput {
       {
         country: "gb",
         response: {
+          correlation: null,
           error: {
             code: "SOLARI_CAPACITY",
             message: "Regional capacity was unavailable.",

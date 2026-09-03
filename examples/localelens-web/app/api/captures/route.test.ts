@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { captureRegion } = vi.hoisted(() => ({
+const { captureRegion, registerRunSession } = vi.hoisted(() => ({
   captureRegion: vi.fn(),
+  registerRunSession: vi.fn(),
 }));
 
 vi.mock("@/src/features/capture/capture-region", () => ({ captureRegion }));
+vi.mock("@/src/features/capture/run-session-registry", () => ({
+  registerRunSession,
+}));
 
 import * as captureRoute from "@/app/api/captures/route";
 
@@ -12,6 +16,14 @@ const { POST } = captureRoute;
 
 const originalLiveCaptureEnabled = process.env.LIVE_CAPTURE_ENABLED;
 const originalApiKey = process.env.SOLARI_API_KEY;
+const runId = "llr_123e4567-e89b-42d3-a456-426614174000";
+const sessionRef = "sol_dab46ee6c619545d0534";
+const validRequestBody = JSON.stringify({
+  url: "https://example.com/",
+  country: "us",
+  runId,
+  attempt: 1,
+});
 
 const captureSuccess = {
   ok: true as const,
@@ -30,11 +42,13 @@ const captureSuccess = {
     capturedAt: "2026-09-01T18:00:00.000Z",
   },
   receipt: {
+    runId,
     country: "us" as const,
+    attempt: 1,
+    sessionRef,
     proxyCountry: "us" as const,
     proxyTier: "residential" as const,
     timezoneId: "America/New_York",
-    sessionId: "safe-session-id",
     recordingRequested: true as const,
   },
   screenshot: {
@@ -86,6 +100,8 @@ async function expectNoStore(response: Response): Promise<unknown> {
 
 afterEach(() => {
   captureRegion.mockReset();
+  registerRunSession.mockReset();
+  vi.restoreAllMocks();
 
   if (originalLiveCaptureEnabled === undefined) {
     delete process.env.LIVE_CAPTURE_ENABLED;
@@ -142,7 +158,7 @@ describe("POST /api/captures", () => {
     process.env.SOLARI_API_KEY = "unit-test-key";
 
     const response = await POST(
-      jsonRequest('{"url":"https://example.com/","country":"us"}'),
+      jsonRequest(validRequestBody),
     );
 
     expect(response.status).toBe(403);
@@ -158,7 +174,7 @@ describe("POST /api/captures", () => {
     delete process.env.SOLARI_API_KEY;
 
     const response = await POST(
-      jsonRequest('{"url":"https://example.com/","country":"us"}'),
+      jsonRequest(validRequestBody),
     );
 
     expect(response.status).toBe(503);
@@ -266,7 +282,14 @@ describe("POST /api/captures", () => {
     process.env.SOLARI_API_KEY = "unit-test-key";
 
     const response = await POST(
-      jsonRequest('{"url":"https://example.com/","country":"xx"}'),
+      jsonRequest(
+        JSON.stringify({
+          url: "https://example.com/",
+          country: "xx",
+          runId,
+          attempt: 1,
+        }),
+      ),
     );
 
     expect(response.status).toBe(400);
@@ -280,16 +303,58 @@ describe("POST /api/captures", () => {
   it("returns one successful regional capture", async () => {
     process.env.LIVE_CAPTURE_ENABLED = "true";
     process.env.SOLARI_API_KEY = "unit-test-key";
-    captureRegion.mockResolvedValue(captureSuccess);
+    registerRunSession.mockReturnValue({
+      runId,
+      country: "us",
+      attempt: 1,
+      sessionRef,
+    });
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const consoleInfo = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    captureRegion.mockImplementation(async (_request, dependencies) => {
+      const correlation = dependencies.registerSession({
+        runId,
+        country: "us",
+        attempt: 1,
+        sessionId: "raw-provider-session-id",
+      });
+      expect(correlation.sessionRef).toBe(sessionRef);
+      return captureSuccess;
+    });
 
     const response = await POST(
-      jsonRequest('{"url":"https://example.com/","country":"us"}'),
+      jsonRequest(validRequestBody),
     );
     const body = await expectNoStore(response);
 
     expect(response.status).toBe(200);
     expect(body).toEqual(captureSuccess);
     expect(JSON.stringify(body)).not.toContain("unit-test-key");
+    expect(JSON.stringify(body)).not.toContain("raw-provider-session-id");
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+      "raw-provider-session-id",
+    );
+    expect(JSON.stringify(consoleInfo.mock.calls)).not.toContain(
+      "raw-provider-session-id",
+    );
+    expect(JSON.parse(String(consoleInfo.mock.calls[0]?.[0]))).toEqual({
+      category: "session_registered",
+      requestId: expect.any(String),
+      runId,
+      country: "us",
+      attempt: 1,
+      sessionRef,
+    });
+    expect(registerRunSession).toHaveBeenCalledWith({
+      runId,
+      country: "us",
+      attempt: 1,
+      sessionId: "raw-provider-session-id",
+    });
     expect(captureRegion).toHaveBeenCalledOnce();
   });
 
@@ -305,11 +370,12 @@ describe("POST /api/captures", () => {
     process.env.SOLARI_API_KEY = "unit-test-key";
     captureRegion.mockResolvedValue({
       ok: false,
+      correlation: null,
       error: { code, message: "Safe message", retryable: false },
     });
 
     const response = await POST(
-      jsonRequest('{"url":"https://example.com/","country":"us"}'),
+      jsonRequest(validRequestBody),
     );
 
     expect(response.status).toBe(status);

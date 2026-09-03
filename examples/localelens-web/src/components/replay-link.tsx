@@ -3,13 +3,15 @@
 import { ExternalLink, LoaderCircle, RotateCcw, Unlink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import type { CaptureCorrelation } from "@/src/features/capture/contracts";
+
 type ReplayState =
   | { status: "pending" }
   | { status: "ready"; replayUrl: string }
   | { status: "unavailable" };
 
 type SessionReplayState = {
-  sessionId: string;
+  correlationKey: string;
   result: ReplayState;
 };
 
@@ -58,28 +60,39 @@ function parseReplayResponse(status: number, body: unknown): ReplayState {
 }
 
 type ReplayLinkProps = {
-  sessionId: string;
+  correlation: CaptureCorrelation;
 };
 
-export function ReplayLink({ sessionId }: ReplayLinkProps) {
+export function ReplayLink({ correlation }: ReplayLinkProps) {
+  const correlationKey = `${correlation.runId}:${correlation.country}:${correlation.attempt}:${correlation.sessionRef}`;
   const [state, setState] = useState<SessionReplayState>({
+    correlationKey,
     result: { status: "pending" },
-    sessionId,
   });
   const [recheckCount, setRecheckCount] = useState(0);
-  const lookedUpSessionRef = useRef<string | null>(null);
+  const lookedUpCorrelationRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (lookedUpSessionRef.current === sessionId && recheckCount === 0) return;
+    if (
+      lookedUpCorrelationRef.current === correlationKey &&
+      recheckCount === 0
+    ) {
+      return;
+    }
 
     let controller: AbortController | undefined;
     const lookupTimer = window.setTimeout(() => {
-      lookedUpSessionRef.current = sessionId;
+      lookedUpCorrelationRef.current = correlationKey;
       const lookupController = new AbortController();
       controller = lookupController;
-      setState({ result: { status: "pending" }, sessionId });
+      setState({ correlationKey, result: { status: "pending" } });
+      const query = new URLSearchParams({
+        runId: correlation.runId,
+        country: correlation.country,
+        attempt: String(correlation.attempt),
+      });
 
-      void fetch(`/api/replays/${encodeURIComponent(sessionId)}`, {
+      void fetch(`/api/replays/${correlation.sessionRef}?${query}`, {
         signal: lookupController.signal,
       })
         .then(async (response) => {
@@ -93,12 +106,12 @@ export function ReplayLink({ sessionId }: ReplayLinkProps) {
         })
         .then((nextState) => {
           if (!lookupController.signal.aborted) {
-            setState({ result: nextState, sessionId });
+            setState({ correlationKey, result: nextState });
           }
         })
         .catch(() => {
           if (!lookupController.signal.aborted) {
-            setState({ result: { status: "unavailable" }, sessionId });
+            setState({ correlationKey, result: { status: "unavailable" } });
           }
         });
     }, 0);
@@ -107,13 +120,22 @@ export function ReplayLink({ sessionId }: ReplayLinkProps) {
       window.clearTimeout(lookupTimer);
       controller?.abort();
     };
-  }, [recheckCount, sessionId]);
+  }, [
+    correlation.attempt,
+    correlation.country,
+    correlation.runId,
+    correlation.sessionRef,
+    correlationKey,
+    recheckCount,
+  ]);
 
   const result: ReplayState =
-    state.sessionId === sessionId ? state.result : { status: "pending" };
+    state.correlationKey === correlationKey
+      ? state.result
+      : { status: "pending" };
 
   function recheck() {
-    setState({ result: { status: "pending" }, sessionId });
+    setState({ correlationKey, result: { status: "pending" } });
     setRecheckCount((count) => count + 1);
   }
 

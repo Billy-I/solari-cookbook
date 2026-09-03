@@ -3,6 +3,7 @@ import {
   captureResponseSchema,
   SUPPORTED_COUNTRIES,
   type CaptureRequest,
+  type CaptureCorrelation,
   type CaptureResponse,
   type SupportedCountry,
 } from "./contracts";
@@ -82,6 +83,12 @@ export type SolariLike = {
 export type CaptureDependencies = {
   createClient: () => SolariLike;
   now: () => Date;
+  registerSession(input: {
+    runId: CaptureRequest["runId"];
+    country: SupportedCountry;
+    attempt: number;
+    sessionId: string;
+  }): CaptureCorrelation;
   resolveHost?: ResolveHost;
   requestId?: string;
   log?: (event: CaptureLogEvent) => void;
@@ -134,6 +141,7 @@ export async function captureRegion(
 ): Promise<CaptureResponse> {
   let client: SolariLike | undefined;
   let browser: BrowserLike | undefined;
+  let correlation: CaptureCorrelation | null = null;
   const requestId = dependencies.requestId ?? "unassigned";
   const log = dependencies.log ?? (() => undefined);
   const record = (event: CaptureLogEvent): void => {
@@ -177,6 +185,16 @@ export async function captureRegion(
         .then(async (launchedBrowser) => {
           if (launchDeadlineExpired) {
             try {
+              dependencies.registerSession({
+                runId: parsedRequest.data.runId,
+                country: parsedRequest.data.country,
+                attempt: parsedRequest.data.attempt,
+                sessionId: launchedBrowser.id,
+              });
+            } catch {
+              // Late cleanup still takes priority over correlation failure.
+            }
+            try {
               await withTimeout(
                 () => launchedBrowser.close(),
                 cleanupTimeoutMs,
@@ -203,6 +221,12 @@ export async function captureRegion(
         });
       try {
         browser = await run(() => launchPromise);
+        correlation = dependencies.registerSession({
+          runId: parsedRequest.data.runId,
+          country: parsedRequest.data.country,
+          attempt: parsedRequest.data.attempt,
+          sessionId: browser.id,
+        });
       } catch (error) {
         if (
           typeof error === "object" &&
@@ -295,11 +319,10 @@ export async function captureRegion(
           capturedAt: dependencies.now().toISOString(),
         },
         receipt: {
-          country: parsedRequest.data.country,
+          ...correlation,
           proxyCountry: proxy.country,
           proxyTier: "residential",
           timezoneId: proxy.timezoneId || null,
-          sessionId: browser.id,
           recordingRequested: true,
         },
         screenshot: {
@@ -309,7 +332,7 @@ export async function captureRegion(
         },
       });
     } catch (error) {
-      result = toSafeCaptureFailure(error);
+      result = toSafeCaptureFailure(error, correlation);
       if (
         typeof error === "object" &&
         error !== null &&
@@ -340,7 +363,7 @@ export async function captureRegion(
   }
 
   if (result.ok && cleanupFailed) {
-    return toSafeCaptureFailure(new Error("CAPTURE_FAILED"));
+    return toSafeCaptureFailure(new Error("CAPTURE_FAILED"), correlation);
   }
 
   return result;
