@@ -27,6 +27,7 @@ describe("LocaleLens comparison page", () => {
     expect(
       screen.getByRole("region", { name: "Regional results" }),
     ).toBeVisible();
+    fireEvent.click(screen.getByText("Screenshots and regional evidence"));
     expect(
       screen.getAllByRole("article", { name: /regional evidence/i }),
     ).toHaveLength(3);

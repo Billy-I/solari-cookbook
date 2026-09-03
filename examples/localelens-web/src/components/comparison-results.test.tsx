@@ -26,6 +26,8 @@ describe("ComparisonResults", () => {
       />,
     );
 
+    fireEvent.click(screen.getByText("Detailed field comparison"));
+
     expect(
       screen.getByText(
         "All fields use whitespace normalization. Language and currency comparisons also use locale-invariant lowercasing.",
@@ -37,6 +39,7 @@ describe("ComparisonResults", () => {
     const onRetry = vi.fn();
     const regions: RegionRunState[] = [
       { country: "us", stage: "complete", response: sampleCaptureByCountry.us },
+      { country: "gb", stage: "complete", response: sampleCaptureByCountry.gb },
       {
         country: "de",
         stage: "failed",
@@ -56,6 +59,27 @@ describe("ComparisonResults", () => {
       <ComparisonResults mode="sample" onRetry={onRetry} regions={regions} />,
     );
 
+    const whatChanged = screen.getByRole("heading", { name: "What changed" });
+    const screenshots = screen.getByText("Screenshots and regional evidence");
+    expect(
+      whatChanged.compareDocumentPosition(screenshots) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText("Evidence availability")).toBeVisible();
+    expect(screen.getByText("Localization")).toBeVisible();
+
+    const screenshotsDetails = screenshots.closest("details");
+    const fieldDetails = screen.getByText("Detailed field comparison").closest("details");
+    expect(screenshotsDetails).toBeInstanceOf(HTMLDetailsElement);
+    expect(fieldDetails).toBeInstanceOf(HTMLDetailsElement);
+
+    fireEvent.click(screen.getByText("Detailed field comparison"));
+    expect(
+      screen.getByRole("row", {
+        name: /Title.*Synthetic plans — United States.*Synthetic plans — United Kingdom.*Different/,
+      }),
+    ).toBeVisible();
+    fireEvent.click(screenshots);
     expect(screen.getByRole("article", { name: "United States regional evidence" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Retry Germany" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
@@ -67,6 +91,7 @@ describe("ComparisonResults", () => {
         onRetry={onRetry}
         regions={[
           regions[0]!,
+          regions[1]!,
           { country: "de", stage: "navigating", response: null },
         ]}
       />,

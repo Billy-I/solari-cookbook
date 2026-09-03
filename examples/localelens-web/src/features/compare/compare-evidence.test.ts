@@ -176,22 +176,35 @@ describe("compareEvidence", () => {
     });
   });
 
-  it("marks every row unavailable when a country capture fails", () => {
+  it("preserves comparisons between two successes when a sibling fails", () => {
+    const rows = compareEvidence([
+      {
+        country: "us",
+        response: success({ title: "US plans", documentLanguage: "en" }),
+      },
+      {
+        country: "gb",
+        response: success({ title: "GB plans", documentLanguage: "en" }),
+      },
+      { country: "de", response: failed() },
+    ]);
+
+    expect(rows.find(({ field }) => field === "title")).toEqual({
+      field: "title",
+      kind: "different",
+      values: { gb: "GB plans", us: "US plans" },
+    });
+    expect(rows.find(({ field }) => field === "language")?.kind).toBe("same");
+  });
+
+  it("marks every row unavailable with fewer than two successful captures", () => {
     const rows = compareEvidence([
       { country: "us", response: success() },
       { country: "gb", response: failed() },
     ]);
 
     expect(rows).toHaveLength(8);
-    expect(rows).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          field: "title",
-          kind: "unavailable",
-          values: { us: "Regional plans" },
-        }),
-      ]),
-    );
+    expect(rows.every(({ kind }) => kind === "unavailable")).toBe(true);
   });
 
   it("does not change results when captures arrive in a different order", () => {

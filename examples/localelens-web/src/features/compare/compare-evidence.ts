@@ -71,8 +71,6 @@ export function compareEvidence(captures: ComparisonCapture[]): DifferenceRow[] 
     (count, capture) => count + Number(capture.response.ok),
     0,
   );
-  const hasUnavailableCapture = successfulCaptureCount !== sortedCaptures.length;
-
   return FIELDS.map((field) => {
     const values: Partial<Record<SupportedCountry, string>> = {};
     const normalizedValues: string[] = [];
@@ -87,12 +85,10 @@ export function compareEvidence(captures: ComparisonCapture[]): DifferenceRow[] 
       normalizedValues.push(normalizeForComparison(field, value));
     }
 
-    const kind: DifferenceKind = hasUnavailableCapture
+    const kind: DifferenceKind = successfulCaptureCount < 2
       ? "unavailable"
       : normalizedValues.length !== successfulCaptureCount
-      ? "missing"
-        : successfulCaptureCount < 2
-          ? "unavailable"
+        ? "missing"
           : normalizedValues.every((value) => value === normalizedValues[0])
             ? "same"
             : "different";

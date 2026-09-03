@@ -146,7 +146,9 @@ describe("createJsonReport", () => {
     if (!failure || !failure.response || failure.response.ok) {
       throw new Error("Expected a failed fixture.");
     }
-    failure.response.error.message = "x".repeat(258_368);
+    failure.response.error.message = "";
+    const baseline = createJsonReport(input).byteLength;
+    failure.response.error.message = "x".repeat(262_144 - baseline);
 
     const output = createJsonReport(input);
 
@@ -159,7 +161,9 @@ describe("createJsonReport", () => {
     if (!failure || !failure.response || failure.response.ok) {
       throw new Error("Expected a failed fixture.");
     }
-    failure.response.error.message = "x".repeat(258_369);
+    failure.response.error.message = "";
+    const baseline = createJsonReport(input).byteLength;
+    failure.response.error.message = "x".repeat(262_145 - baseline);
 
     expect(() =>
       createJsonReport(input),
