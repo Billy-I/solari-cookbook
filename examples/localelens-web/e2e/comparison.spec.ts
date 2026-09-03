@@ -1,8 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const firstTargetUrl = "https://example.com/";
-const secondTargetUrl = "https://www.iana.org/";
-
 function observeConsoleErrors(page: Page) {
   const errors: string[] = [];
   page.on("console", (message) => {
@@ -15,14 +12,16 @@ function observeProviderRoutes(page: Page) {
   const providerRequests: string[] = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
-    if (pathname === "/api/captures" || pathname.startsWith("/api/replays")) {
+    if (/^\/api\/(captures|replays)(?:\/|$)/.test(pathname)) {
       providerRequests.push(`${request.method()} ${pathname}`);
     }
   });
   return providerRequests;
 }
 
-test("desktop sample comparisons reset featured evidence and avoid provider requests", async ({ page }) => {
+test("desktop featured demo is fixed, decision-first, and provider-free", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const consoleErrors = observeConsoleErrors(page);
   const providerRequests = observeProviderRoutes(page);
@@ -33,55 +32,49 @@ test("desktop sample comparisons reset featured evidence and avoid provider requ
   });
 
   await page.goto("/");
+  await expect(page.getByText("Demo data — this URL will not be visited.")).toBeVisible();
+  await expect(page.getByText("regional.example.test", { exact: true }).first()).toBeVisible();
   await expect(
-    page.getByLabel("Run evidence").getByText("Sample evidence", { exact: true }),
+    page.getByText("United States, United Kingdom, and Germany"),
   ).toBeVisible();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Download JSON" })).toBeDisabled();
+
+  const hierarchy = await page
+    .locator("h2, .evidence-details > summary")
+    .allTextContents();
+  expect(hierarchy.indexOf("What changed")).toBeLessThan(
+    hierarchy.indexOf("Screenshots and regional evidence"),
+  );
+
+  await page.getByRole("button", { name: "Run featured demo" }).click();
+  await expect(page.getByText(/^llr_[0-9a-f-]{36}$/)).toBeVisible();
+  await expect(page.locator(".receipt-row").getByText("complete", { exact: true })).toBeVisible();
 
   const status = page.getByRole("status", { name: "Comparison status" });
-
-  await page.getByRole("textbox", { name: "URL (HTTPS)" }).fill(firstTargetUrl);
-  await expect(page.getByRole("textbox", { name: "URL (HTTPS)" })).toHaveValue(
-    firstTargetUrl,
-  );
-  await page.getByRole("checkbox", { name: "Germany" }).check();
-  await page.getByRole("button", { name: "Compare markets" }).click();
-
-  await expect(status).toContainText("Queued");
-  await expect(
-    page.getByLabel("Run evidence").getByText("example.com", { exact: true }),
-  ).toBeVisible();
-  for (const market of ["US", "GB", "DE"]) {
-    await expect(status.getByText(market, { exact: true })).toBeVisible();
-  }
   await expect(status.getByText("Complete", { exact: true })).toHaveCount(3);
+  await expect(page.getByRole("heading", { name: "What changed" })).toBeVisible();
+  await expect(page.getByText("Evidence availability")).toBeVisible();
 
+  await page.getByText("Screenshots and regional evidence").click();
+  await expect(page.getByRole("article", { name: /regional evidence$/ })).toHaveCount(3);
+  await page.getByText("Detailed field comparison").click();
   const differences = page.getByRole("table", {
     name: "Captured field differences by market",
   });
   await expect(differences).toBeVisible();
   await expect(differences.getByRole("rowheader", { name: "Currency" })).toBeVisible();
-  await expect(differences.getByText("Different").first()).toBeVisible();
 
-  const download = page.waitForEvent("download");
+  const downloadEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download JSON" }).click();
-  await expect((await download).suggestedFilename()).toMatch(/localelens.*\.json$/);
-
+  await expect((await downloadEvent).suggestedFilename()).toMatch(/localelens.*\.json$/);
   await page.getByRole("button", { name: "Print evidence" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-print-opened", "true");
 
-  await page.getByRole("textbox", { name: "URL (HTTPS)" }).fill(secondTargetUrl);
-  await expect(page.getByRole("textbox", { name: "URL (HTTPS)" })).toHaveValue(
-    secondTargetUrl,
-  );
-  await page.getByRole("button", { name: "Compare markets" }).click();
-  await expect(status).toContainText("Queued");
-  await expect(
-    page.getByLabel("Run evidence").getByText("www.iana.org", { exact: true }),
-  ).toBeVisible();
-  await expect(status.getByText("Complete", { exact: true })).toHaveCount(3);
   expect(
     await page.locator("html").evaluate(
-      (documentElement) => documentElement.scrollWidth <= documentElement.clientWidth,
+      (element) => element.scrollWidth <= element.clientWidth,
     ),
   ).toBe(true);
   expect(providerRequests).toEqual([]);

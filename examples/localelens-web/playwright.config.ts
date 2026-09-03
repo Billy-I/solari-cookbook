@@ -20,7 +20,10 @@ export default defineConfig({
   ],
   webServer: {
     command: "npm run dev -- --hostname 127.0.0.1 --port 34123",
-    env: { NEXT_PUBLIC_APP_MODE: "sample" },
+    env: {
+      NEXT_DIST_DIR: ".next-e2e",
+      NEXT_PUBLIC_APP_MODE: "sample",
+    },
     port: 34123,
     reuseExistingServer: false,
   },

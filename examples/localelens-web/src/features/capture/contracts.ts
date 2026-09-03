@@ -3,14 +3,16 @@ import { z } from "zod";
 import { SUPPORTED_COUNTRIES, type SupportedCountry } from "./countries";
 import { SAFE_CAPTURE_ERROR_CODES } from "./error-codes";
 import { CAPTURE_LIMITS } from "./limits";
-import { appRunIdSchema } from "./run-id";
+import { APP_RUN_ID_PATTERN } from "./run-id";
 
 export { SUPPORTED_COUNTRIES, type SupportedCountry } from "./countries";
 export {
   SAFE_CAPTURE_ERROR_CODES,
   type SafeCaptureErrorCode,
 } from "./error-codes";
-export { appRunIdSchema, type AppRunId } from "./run-id";
+export { type AppRunId } from "./run-id";
+
+export const appRunIdSchema = z.string().regex(APP_RUN_ID_PATTERN);
 
 const supportedCountrySchema = z.enum(SUPPORTED_COUNTRIES);
 

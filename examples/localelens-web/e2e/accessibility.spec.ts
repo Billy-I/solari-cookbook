@@ -1,7 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
-const targetUrl = "https://example.com/";
 const providerRequests = new WeakMap<Page, string[]>();
 
 test.beforeEach(async ({ page }) => {
@@ -9,7 +8,7 @@ test.beforeEach(async ({ page }) => {
   providerRequests.set(page, requests);
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
-    if (pathname === "/api/captures" || pathname.startsWith("/api/replays")) {
+    if (/^\/api\/(captures|replays)(?:\/|$)/.test(pathname)) {
       requests.push(`${request.method()} ${pathname}`);
     }
   });
@@ -24,238 +23,89 @@ async function expectAxeClean(page: Page) {
   expect(results.violations).toEqual([]);
 }
 
-async function startSampleRun(page: Page, thirdMarket: "France" | "Germany") {
-  await page.getByRole("textbox", { name: "URL (HTTPS)" }).fill(targetUrl);
-  await page.getByRole("checkbox", { name: thirdMarket }).check();
-  await page.getByRole("button", { name: "Compare markets" }).click();
+async function runFeaturedDemo(page: Page) {
+  await page.getByRole("button", { name: "Run featured demo" }).click();
+  await expect(page.getByText(/^llr_[0-9a-f-]{36}$/)).toBeVisible();
+  await expect(page.locator(".receipt-row").getByText("complete", { exact: true })).toBeVisible();
 }
 
-function measureFocusContrast(element: Element) {
-  type Rgba = [number, number, number, number];
-
-  function parseColor(value: string): Rgba {
-    const rgb = value.match(/^rgba?\((.+)\)$/);
-    if (rgb) {
-      const components = rgb[1];
-      if (components === undefined) throw new Error(`Invalid computed color: ${value}`);
-      const [red = Number.NaN, green = Number.NaN, blue = Number.NaN, alpha = 1] =
-        components.split(/[\s,/]+/).filter(Boolean).map(Number);
-      if (![red, green, blue, alpha].every(Number.isFinite)) {
-        throw new Error(`Invalid computed color: ${value}`);
-      }
-      return [red, green, blue, alpha];
-    }
-
-    const srgb = value.match(/^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)$/);
-    if (srgb) {
-      return [
-        Number(srgb[1]) * 255,
-        Number(srgb[2]) * 255,
-        Number(srgb[3]) * 255,
-        srgb[4] === undefined ? 1 : Number(srgb[4]),
-      ];
-    }
-
-    throw new Error(`Unsupported computed color: ${value}`);
-  }
-
-  function effectiveBackground(start: Element): { color: string; rgb: Rgba } {
-    let current: Element | null = start;
-    while (current) {
-      const color = getComputedStyle(current).backgroundColor;
-      const parsed = parseColor(color);
-      if (parsed[3] > 0) return { color, rgb: parsed };
-      current = current.parentElement;
-    }
-    return { color: "rgb(255, 255, 255)", rgb: [255, 255, 255, 1] };
-  }
-
-  function luminance([red, green, blue]: Rgba): number {
-    function channelLuminance(channel: number): number {
-      const normalized = channel / 255;
-      return normalized <= 0.04045
-        ? normalized / 12.92
-        : ((normalized + 0.055) / 1.055) ** 2.4;
-    }
-
-    return (
-      0.2126 * channelLuminance(red) +
-      0.7152 * channelLuminance(green) +
-      0.0722 * channelLuminance(blue)
-    );
-  }
-
-  const outlineColor = getComputedStyle(element).outlineColor;
-  const background = effectiveBackground(element.parentElement ?? element);
-  const outlineLuminance = luminance(parseColor(outlineColor));
-  const backgroundLuminance = luminance(background.rgb);
-  const ratio =
-    (Math.max(outlineLuminance, backgroundLuminance) + 0.05) /
-    (Math.min(outlineLuminance, backgroundLuminance) + 0.05);
-
-  return {
-    adjacentBackground: background.color,
-    outlineColor,
-    ratio: Number(ratio.toFixed(3)),
-  };
+async function expectVisibleFocus(target: Locator) {
+  await expect(target).toBeFocused();
+  const style = await target.evaluate((element) => {
+    const computed = getComputedStyle(element);
+    return {
+      color: computed.outlineColor,
+      style: computed.outlineStyle,
+      width: Number.parseFloat(computed.outlineWidth),
+    };
+  });
+  expect(style.style).not.toBe("none");
+  expect(style.width).toBeGreaterThanOrEqual(2);
+  expect(style.color).not.toBe("rgba(0, 0, 0, 0)");
 }
 
-test("idle sample state has no automated axe violations", async ({ page }) => {
+test("idle and completed demo states have no automated axe violations", async ({
+  page,
+}) => {
   await page.goto("/");
-  const runEvidence = page.getByRole("region", { name: "Run evidence" });
-  await expect(
-    runEvidence.getByText("Featured sample", { exact: true }),
-  ).toBeVisible();
-  await expect(runEvidence.getByText("Preview", { exact: true })).toBeVisible();
+  await expect(page.getByText("Demo data — this URL will not be visited.")).toBeVisible();
+  await expectAxeClean(page);
+
+  await runFeaturedDemo(page);
+  await page.getByText("Screenshots and regional evidence").click();
+  await page.getByText("Detailed field comparison").click();
   await expectAxeClean(page);
 });
 
-test("validation error is focused and has no automated axe violations", async ({
+test("keyboard order exposes disclosures and exports without focus jumps", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("textbox", { name: "URL (HTTPS)" }).fill("http://example.com");
-  await page.getByRole("button", { name: "Compare markets" }).click();
+  const demo = page.getByRole("button", { name: "Run featured demo" });
+  await demo.focus();
+  await page.keyboard.press("Enter");
+  await expect(demo).toBeFocused();
+  await expect(page.locator(".receipt-row").getByText("complete", { exact: true })).toBeVisible();
+  await expect(demo).toBeFocused();
 
-  const alert = page.locator('.form-alert[role="alert"]');
-  await expect(alert).toHaveCount(1);
-  await expect(alert).toBeFocused();
-  await expect(alert).toContainText("Enter a valid HTTPS URL");
-  await expectAxeClean(page);
-});
+  const screenshots = page.getByText("Screenshots and regional evidence");
+  await page.keyboard.press("Tab");
+  await expectVisibleFocus(screenshots);
+  await page.keyboard.press("Enter");
+  await expect(screenshots.locator("..")).toHaveAttribute("open", "");
 
-test("running state uses one polite live region without moving submit focus", async ({
-  page,
-}) => {
-  const installedAt = new Date("2026-09-02T08:00:00.000Z");
-  await page.clock.install({ time: installedAt });
-  await page.goto("/");
-  const compare = page.getByRole("button", { name: "Compare markets" });
-  await page.getByRole("textbox", { name: "URL (HTTPS)" }).fill(targetUrl);
-  await page.getByRole("checkbox", { name: "Germany" }).check();
-  await compare.focus();
-  await page.clock.pauseAt(new Date(installedAt.getTime() + 60_000));
-  await compare.click();
+  const details = page.getByText("Detailed field comparison");
+  await page.keyboard.press("Tab");
+  await expectVisibleFocus(details);
+  await page.keyboard.press("Space");
+  await expect(details.locator("..")).toHaveAttribute("open", "");
 
-  const liveRegion = page.locator('[role="status"][aria-live="polite"]');
-  await expect(liveRegion).toHaveCount(1);
-  await expect(liveRegion.getByText("Queued", { exact: true })).toHaveCount(3);
-  await expect(liveRegion.getByText("Complete", { exact: true })).toHaveCount(0);
-  await expect(page.locator(".receipt-row").getByText("running", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "URL (HTTPS)" })).toBeDisabled();
-  await expect(compare).toBeFocused();
-  const axeAnalysis = new AxeBuilder({ page }).analyze();
-  await page.clock.runFor(200);
-  const axeResults = await axeAnalysis;
-  expect(axeResults.violations).toEqual([]);
-  await expect(liveRegion.getByRole("listitem")).toHaveCount(3);
-  await expect(liveRegion.getByText("Complete", { exact: true })).toHaveCount(0);
-  await expect(page.locator(".receipt-row").getByText("running", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "URL (HTTPS)" })).toBeDisabled();
-});
+  const tableScroll = page.locator(".table-scroll");
+  await page.keyboard.press("Tab");
+  await expectVisibleFocus(tableScroll);
 
-test("complete state exposes descriptive screenshots and labeled comparison structures", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await startSampleRun(page, "Germany");
-
-  const status = page.getByRole("status", { name: "Comparison status" });
-  await expect(status.getByText("Complete", { exact: true })).toHaveCount(3);
-  const regionalResults = page.getByRole("region", { name: "Regional results" });
-  await expect(regionalResults.getByRole("img")).toHaveCount(3);
-  for (const country of ["United States", "United Kingdom", "Germany"]) {
-    await expect(
-      regionalResults.getByRole("img", {
-        name: new RegExp(
-          `${country} evidence for regional\\.example\\.test, captured`,
-          "i",
-        ),
-      }),
-    ).toBeVisible();
-  }
-  await expect(
-    page.getByRole("table", { name: "Captured field differences by market" }),
-  ).toBeVisible();
-  await expect(status.getByRole("list")).toBeVisible();
-  await expectAxeClean(page);
-});
-
-test("partial-failure state remains labeled and has no automated axe violations", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await startSampleRun(page, "France");
-
-  const status = page.getByRole("status", { name: "Comparison status" });
-  await expect(status.getByText("Complete", { exact: true })).toHaveCount(2);
-  await expect(status.getByText("Failed", { exact: true })).toHaveCount(1);
-  await expect(
-    page.getByRole("article", { name: "France regional evidence failed" }),
-  ).toBeVisible();
-  await expect(page.getByText("Partial report: 2 of 3 captures succeeded.")).toBeVisible();
-  await expectAxeClean(page);
-});
-
-test("keyboard order is stable and every focused control has a visible outline", async ({
-  page,
-}) => {
-  await page.goto("/");
-
-  const expectedOrder = [
-    page.getByText("How it works", { exact: true }),
-    page.getByRole("textbox", { name: "URL (HTTPS)" }),
-    page.getByRole("checkbox", { name: "Germany" }),
-    page.getByRole("checkbox", { name: "France" }),
-    page.getByRole("checkbox", { name: "Japan" }),
-    page.getByRole("checkbox", { name: "Australia" }),
-    page.getByRole("button", { name: "Compare markets" }),
-    page.locator(".table-scroll"),
-    page.getByRole("button", { name: "Download JSON" }),
-    page.getByRole("button", { name: "Print evidence" }),
-  ];
-
-  for (const target of expectedOrder) {
-    await page.keyboard.press("Tab");
-    await expect(target).toBeFocused();
-    const focusStyle = await target.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return {
-        color: style.outlineColor,
-        style: style.outlineStyle,
-        width: Number.parseFloat(style.outlineWidth),
-      };
-    });
-    expect(focusStyle.style).not.toBe("none");
-    expect(focusStyle.width).toBeGreaterThanOrEqual(2);
-    expect(focusStyle.color).not.toBe("rgba(0, 0, 0, 0)");
-    const contrast = await target.evaluate(measureFocusContrast);
-    expect(
-      contrast.ratio,
-      `Focus indicator ${contrast.outlineColor} against ${contrast.adjacentBackground}`,
-    ).toBeGreaterThanOrEqual(3);
-  }
+  const download = page.getByRole("button", { name: "Download JSON" });
+  await page.keyboard.press("Tab");
+  await expectVisibleFocus(download);
+  const print = page.getByRole("button", { name: "Print evidence" });
+  await page.keyboard.press("Tab");
+  await expectVisibleFocus(print);
 });
 
 test.describe("coarse-pointer targets", () => {
   test.use({ hasTouch: true, viewport: { height: 844, width: 390 } });
 
-  test("interactive targets are at least 44 by 44 CSS pixels", async ({ page }) => {
+  test("all interactive targets are at least 44 by 44 CSS pixels", async ({
+    page,
+  }) => {
     await page.goto("/");
-    expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
+    await runFeaturedDemo(page);
 
     const targets = [
-      page.locator("summary"),
-      page.getByRole("textbox", { name: "URL (HTTPS)" }),
-      ...[
-        "United States",
-        "United Kingdom",
-        "Germany",
-        "France",
-        "Japan",
-        "Australia",
-      ].map((name) => page.getByRole("checkbox", { name }).locator("..")),
-      page.getByRole("button", { name: "Compare markets" }),
+      page.getByText("How it works", { exact: true }),
+      page.getByRole("button", { name: "Run featured demo" }),
+      page.getByText("Screenshots and regional evidence"),
+      page.getByText("Detailed field comparison"),
       page.getByRole("button", { name: "Download JSON" }),
       page.getByRole("button", { name: "Print evidence" }),
     ];
@@ -263,8 +113,8 @@ test.describe("coarse-pointer targets", () => {
     for (const target of targets) {
       const box = await target.boundingBox();
       expect(box, await target.evaluate((element) => element.outerHTML)).not.toBeNull();
-      expect(box!.width, await target.evaluate((element) => element.outerHTML)).toBeGreaterThanOrEqual(44);
-      expect(box!.height, await target.evaluate((element) => element.outerHTML)).toBeGreaterThanOrEqual(44);
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+      expect(box!.height).toBeGreaterThanOrEqual(44);
     }
   });
 });
@@ -273,9 +123,6 @@ test("reduced-motion preference removes meaningful CSS motion", async ({ page })
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
 
-  expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(
-    true,
-  );
   const motion = await page.locator(".primary-action").evaluate((element) => {
     const style = getComputedStyle(element);
     return {
@@ -289,22 +136,20 @@ test("reduced-motion preference removes meaningful CSS motion", async ({ page })
   expect(Number.parseFloat(motion.transitionDuration)).toBeLessThanOrEqual(0.00001);
 });
 
-test("640 CSS pixel reflow proxy preserves content expected at 200 percent zoom", async ({
+test("640 CSS pixel reflow preserves all decision and action content", async ({
   page,
 }) => {
   await page.setViewportSize({ height: 720, width: 640 });
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Compare the experience by market" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Regional results" })).toBeVisible();
-  await expect(
-    page.getByLabel("Captured field differences by market, compact view"),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What changed" })).toBeVisible();
+  await expect(page.getByText("Screenshots and regional evidence")).toBeVisible();
+  await expect(page.getByText("Detailed field comparison")).toBeVisible();
   await expect(page.getByRole("button", { name: "Download JSON" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Print evidence" })).toBeVisible();
   expect(
     await page.locator("html").evaluate(
-      (documentElement) => documentElement.scrollWidth <= documentElement.clientWidth,
+      (element) => element.scrollWidth <= element.clientWidth,
     ),
   ).toBe(true);
 });

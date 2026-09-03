@@ -139,7 +139,9 @@ async function main() {
     await waitForServer(port, child);
     const failures = [];
     const captureRequest = JSON.stringify({
+      attempt: 1,
       country: "us",
+      runId: "llr_00000000-0000-4000-8000-000000000000",
       url: "https://example.com/",
     });
     const capture = await request(port, "/api/captures", "POST", {
@@ -174,6 +176,7 @@ async function main() {
       capture.body !==
         JSON.stringify({
           ok: false,
+          correlation: null,
           error: {
             code: "CAPTURE_FAILED",
             message: "The regional capture could not be completed.",
