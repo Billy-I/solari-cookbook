@@ -37,7 +37,12 @@ export default function Page() {
   const evidenceMode = run.value === null ? "sample" : run.mode;
   const evidenceStatus = run.value === null ? "complete" : run.status;
   const hasPendingRegion = run.regions.some(
-    ({ stage }) => stage !== "complete" && stage !== "failed",
+    ({ stage }) =>
+      stage === "queued" ||
+      stage === "launching" ||
+      stage === "navigating" ||
+      stage === "extracting" ||
+      stage === "closing",
   );
 
   function startComparison(value: AuditFormValue) {
@@ -64,12 +69,12 @@ export default function Page() {
       <main>
         <section aria-label="Run comparison" className="run-control">
           <div className="section-heading">
-            <p className="eyebrow">Run comparison</p>
             <h1>Compare the experience by market</h1>
           </div>
 
           <AuditForm
             busy={hasPendingRegion}
+            mode={run.mode}
             onSubmit={startComparison}
           />
         </section>
@@ -78,10 +83,22 @@ export default function Page() {
           <RunReceipt
             featured={run.value === null}
             mode={evidenceMode}
+            runId={run.runId}
             status={run.status}
             value={run.value ?? featuredValue}
           />
-          <RunStatus regions={statusRegions} />
+          <RunStatus progress={run.progress} regions={statusRegions} />
+          {hasPendingRegion ? (
+            <div className="run-cancel-row">
+              <button
+                className="secondary-action"
+                onClick={run.cancel}
+                type="button"
+              >
+                Cancel comparison
+              </button>
+            </div>
+          ) : null}
         </section>
 
         <ComparisonResults
@@ -95,7 +112,6 @@ export default function Page() {
           className="evidence-actions"
         >
           <div>
-            <p className="eyebrow">Evidence actions</p>
             <h2 id="evidence-actions-heading">Keep the evidence reviewable</h2>
           </div>
           <ExportActions

@@ -1,6 +1,9 @@
 import type { CaptureStage } from "@/src/features/capture/contracts";
 import { COUNTRY_NAMES } from "@/src/features/capture/countries";
-import type { RegionRunState } from "@/src/features/run/use-comparison-run";
+import type {
+  RegionRunState,
+  RunProgress,
+} from "@/src/features/run/use-comparison-run";
 
 const stageLabels: Record<CaptureStage, string> = {
   queued: "Queued",
@@ -14,10 +17,11 @@ const stageLabels: Record<CaptureStage, string> = {
 };
 
 type RunStatusProps = {
+  progress?: RunProgress;
   regions: RegionRunState[];
 };
 
-export function RunStatus({ regions }: RunStatusProps) {
+export function RunStatus({ progress, regions }: RunStatusProps) {
   if (regions.length === 0) {
     return null;
   }
@@ -29,7 +33,17 @@ export function RunStatus({ regions }: RunStatusProps) {
       className="run-status"
       role="status"
     >
-      <p className="run-status-label">Status</p>
+      <div className="run-status-summary">
+        <p className="run-status-label">Status</p>
+        {progress && progress.selected > 0 ? (
+          <p className="run-progress">
+            {progress.completed + progress.failed} of {progress.selected} settled
+            {progress.totalBatches > 0
+              ? ` · Batch ${progress.batch} of ${progress.totalBatches}`
+              : ""}
+          </p>
+        ) : null}
+      </div>
       <ul>
         {regions.map((region) => (
           <li key={region.country}>

@@ -5,7 +5,7 @@ import { AuditForm } from "@/src/components/audit-form";
 
 describe("AuditForm", () => {
   it("selects the United States and United Kingdom by default", () => {
-    render(<AuditForm onSubmit={vi.fn()} />);
+    render(<AuditForm mode="live" onSubmit={vi.fn()} />);
 
     expect(
       screen.getByRole("checkbox", { name: "United States" }),
@@ -18,8 +18,8 @@ describe("AuditForm", () => {
     ).not.toBeChecked();
   });
 
-  it("prevents selecting fewer than two or more than three countries", () => {
-    render(<AuditForm onSubmit={vi.fn()} />);
+  it("shows the authoritative catalogue and permits four live markets", () => {
+    render(<AuditForm mode="live" onSubmit={vi.fn()} />);
 
     const unitedStates = screen.getByRole("checkbox", {
       name: "United States",
@@ -27,28 +27,48 @@ describe("AuditForm", () => {
     const germany = screen.getByRole("checkbox", { name: "Germany" });
     const france = screen.getByRole("checkbox", { name: "France" });
 
+    expect(screen.getAllByRole("checkbox")).toHaveLength(15);
     expect(unitedStates).toBeDisabled();
     fireEvent.click(unitedStates);
     expect(unitedStates).toBeChecked();
 
     fireEvent.click(germany);
     expect(germany).toBeChecked();
-    expect(france).toBeDisabled();
     fireEvent.click(france);
-    expect(france).not.toBeChecked();
+    expect(france).toBeChecked();
+    expect(screen.getAllByRole("checkbox", { checked: true })).toHaveLength(4);
+  });
+
+  it("renders an immutable featured demo without editable controls", () => {
+    const onSubmit = vi.fn();
+    render(<AuditForm mode="sample" onSubmit={onSubmit} />);
+
+    expect(
+      screen.getByText("Demo data — this URL will not be visited."),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("textbox", { name: "URL (HTTPS)" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Run featured demo" }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      url: "https://regional.example.test/pricing",
+      countries: ["us", "gb", "de"],
+    });
   });
 
   it.each(["not a url", "http://regional.example.test/pricing"])(
     "focuses one alert and does not submit invalid target %s",
     (url) => {
       const onSubmit = vi.fn();
-      render(<AuditForm onSubmit={onSubmit} />);
+      render(<AuditForm mode="live" onSubmit={onSubmit} />);
 
       fireEvent.change(screen.getByRole("textbox", { name: "URL (HTTPS)" }), {
         target: { value: url },
       });
       fireEvent.click(
-        screen.getByRole("button", { name: "Compare markets" }),
+        screen.getByRole("button", { name: "Compare live through Solari" }),
       );
 
       const alerts = screen.getAllByRole("alert");
@@ -60,24 +80,24 @@ describe("AuditForm", () => {
 
   it("submits a trimmed HTTPS URL and countries in display order", () => {
     const onSubmit = vi.fn();
-    render(<AuditForm onSubmit={onSubmit} />);
+    render(<AuditForm mode="live" onSubmit={onSubmit} />);
 
     fireEvent.change(screen.getByRole("textbox", { name: "URL (HTTPS)" }), {
       target: { value: "  https://regional.example.test/pricing  " },
     });
     fireEvent.click(screen.getByRole("checkbox", { name: "Germany" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Compare markets" }),
+      screen.getByRole("button", { name: "Compare live through Solari" }),
     );
 
     expect(onSubmit).toHaveBeenCalledWith({
       url: "https://regional.example.test/pricing",
-      countries: ["us", "gb", "de"],
+      countries: ["de", "gb", "us"],
     });
   });
 
   it("keeps run values visible while disabling mutations when busy", () => {
-    render(<AuditForm busy onSubmit={vi.fn()} />);
+    render(<AuditForm busy mode="live" onSubmit={vi.fn()} />);
 
     expect(
       screen.getByRole("textbox", { name: "URL (HTTPS)" }),
@@ -88,20 +108,20 @@ describe("AuditForm", () => {
     for (const checkbox of screen.getAllByRole("checkbox")) {
       expect(checkbox).toBeDisabled();
     }
-    expect(screen.getByRole("button", { name: "Compare markets" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Compare live through Solari" })).toHaveAttribute(
       "aria-disabled",
       "true",
     );
-    expect(screen.getByRole("button", { name: "Compare markets" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Compare live through Solari" })).not.toBeDisabled();
   });
 
   it("preserves Compare focus and ignores repeat activation while busy", () => {
     const onSubmit = vi.fn();
-    const { rerender } = render(<AuditForm onSubmit={onSubmit} />);
-    const compare = screen.getByRole("button", { name: "Compare markets" });
+    const { rerender } = render(<AuditForm mode="live" onSubmit={onSubmit} />);
+    const compare = screen.getByRole("button", { name: "Compare live through Solari" });
     compare.focus();
 
-    rerender(<AuditForm busy onSubmit={onSubmit} />);
+    rerender(<AuditForm busy mode="live" onSubmit={onSubmit} />);
 
     expect(compare).toHaveFocus();
     fireEvent.click(compare);

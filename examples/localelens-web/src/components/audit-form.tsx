@@ -3,14 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-  COUNTRY_NAMES,
+  COUNTRY_CATALOGUE,
   SUPPORTED_COUNTRIES,
   type SupportedCountry,
 } from "@/src/features/capture/countries";
 import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 
-const defaultCountries: SupportedCountry[] = ["us", "gb"];
-const defaultUrl = "https://regional.example.test/pricing";
+const featuredCountries: SupportedCountry[] = ["us", "gb", "de"];
+const defaultCountries: SupportedCountry[] = SUPPORTED_COUNTRIES.filter(
+  (country) => country === "us" || country === "gb",
+);
+const featuredUrl = "https://regional.example.test/pricing";
 
 export type AuditFormValue = {
   url: string;
@@ -19,6 +22,7 @@ export type AuditFormValue = {
 
 type AuditFormProps = {
   busy?: boolean;
+  mode: "sample" | "live";
   onSubmit: (value: AuditFormValue) => void;
 };
 
@@ -30,8 +34,8 @@ function isHttpsUrl(value: string): boolean {
   }
 }
 
-export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
-  const [url, setUrl] = useState(defaultUrl);
+export function AuditForm({ busy = false, mode, onSubmit }: AuditFormProps) {
+  const [url, setUrl] = useState(featuredUrl);
   const [countries, setCountries] =
     useState<SupportedCountry[]>(defaultCountries);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +70,11 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
     event.preventDefault();
     if (busy) return;
 
+    if (mode === "sample") {
+      onSubmit({ url: featuredUrl, countries: [...featuredCountries] });
+      return;
+    }
+
     const normalizedUrl = url.trim();
 
     if (!isHttpsUrl(normalizedUrl)) {
@@ -74,7 +83,37 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
     }
 
     setError(null);
-    onSubmit({ url: normalizedUrl, countries });
+      onSubmit({ url: normalizedUrl, countries });
+  }
+
+  if (mode === "sample") {
+    return (
+      <form
+        aria-label="Run featured demo"
+        className="control-grid sample-control"
+        onSubmit={submit}
+      >
+        <p className="mode-notice">Demo data — this URL will not be visited.</p>
+        <dl className="sample-definition">
+          <div>
+            <dt>Featured target</dt>
+            <dd>regional.example.test</dd>
+          </div>
+          <div>
+            <dt>Featured markets</dt>
+            <dd>United States, United Kingdom, and Germany</dd>
+          </div>
+        </dl>
+        <button
+          aria-disabled={busy || undefined}
+          aria-label="Run featured demo"
+          className="primary-action"
+          type="submit"
+        >
+          {busy ? "Running featured demo…" : "Run featured demo"}
+        </button>
+      </form>
+    );
   }
 
   return (
@@ -84,6 +123,7 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
       noValidate
       onSubmit={submit}
     >
+      <p className="mode-notice">Live through Solari.</p>
       <label className="field field-url">
         <span>URL (HTTPS)</span>
         <input
@@ -99,7 +139,7 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
       <fieldset className="country-fieldset" disabled={busy}>
         <legend>Markets</legend>
         <div className="country-options">
-          {SUPPORTED_COUNTRIES.map((country) => {
+          {COUNTRY_CATALOGUE.map(({ code: country, name }) => {
             const selected = countries.includes(country);
             const atMinimum = selected && countries.length === 2;
             const atMaximum =
@@ -109,14 +149,14 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
             return (
               <label className="country-option" key={country}>
                 <input
-                  aria-label={COUNTRY_NAMES[country]}
+                  aria-label={name}
                   checked={selected}
                   disabled={busy || atMinimum || atMaximum}
                   onChange={() => toggleCountry(country)}
                   type="checkbox"
                 />
                 <span className="country-code">{country.toUpperCase()}</span>
-                <span>{COUNTRY_NAMES[country]}</span>
+                <span>{name}</span>
               </label>
             );
           })}
@@ -125,11 +165,11 @@ export function AuditForm({ busy = false, onSubmit }: AuditFormProps) {
 
       <button
         aria-disabled={busy || undefined}
-        aria-label="Compare markets"
+        aria-label="Compare live through Solari"
         className="primary-action"
         type="submit"
       >
-        {busy ? "Comparing markets…" : "Compare markets"}
+        {busy ? "Comparing live…" : "Compare live through Solari"}
       </button>
 
       {error ? (

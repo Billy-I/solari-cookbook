@@ -59,21 +59,19 @@ describe("LocaleLens comparison page", () => {
     expect(
       within(runEvidence).getByText("Preview", { exact: true }),
     ).toBeVisible();
-    expect(
-      screen.getByRole("checkbox", { name: "United States" }),
-    ).toBeChecked();
-    expect(
-      screen.getByRole("checkbox", { name: "United Kingdom" }),
-    ).toBeChecked();
-    expect(
-      screen.getByRole("checkbox", { name: "Germany" }),
-    ).not.toBeChecked();
+    expect(screen.getByText("Demo data — this URL will not be visited.")).toBeVisible();
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run featured demo" })).toBeVisible();
   });
 
   it("labels featured fixtures as a preview until a live run starts", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_MODE", "live");
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
     render(<Page />);
+
+    expect(screen.getByText("Live through Solari.")).toBeVisible();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(15);
 
     expect(
       within(screen.getByRole("region", { name: "Run evidence" })).getByText(
@@ -85,9 +83,16 @@ describe("LocaleLens comparison page", () => {
       screen.queryByText("Live Solari capture", { exact: true }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Compare markets" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Compare live through Solari" }),
+    );
 
     expect(screen.getByText("Live Solari capture", { exact: true })).toBeVisible();
+    expect(screen.getByText("Run ID", { exact: true })).toBeVisible();
+    expect(screen.getByText(/^llr_[0-9a-f-]{36}$/)).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Cancel comparison" }),
+    ).toBeEnabled();
     expect(
       screen.queryByText("Featured sample", { exact: true }),
     ).not.toBeInTheDocument();
@@ -100,5 +105,11 @@ describe("LocaleLens comparison page", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Download JSON" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Print evidence" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel comparison" }));
+    expect(screen.getAllByText("Cancelled")).toHaveLength(2);
+    expect(
+      screen.queryByRole("button", { name: "Cancel comparison" }),
+    ).not.toBeInTheDocument();
   });
 });

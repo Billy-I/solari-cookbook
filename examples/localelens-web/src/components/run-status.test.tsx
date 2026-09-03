@@ -55,4 +55,23 @@ describe("RunStatus", () => {
 
     expect(document.activeElement).toBe(control);
   });
+
+  it("summarizes aggregate progress and the active batch", () => {
+    render(
+      <RunStatus
+        progress={{
+          selected: 5,
+          queued: 2,
+          running: 1,
+          completed: 1,
+          failed: 1,
+          batch: 1,
+          totalBatches: 2,
+        }}
+        regions={regions}
+      />,
+    );
+
+    expect(screen.getByText("2 of 5 settled · Batch 1 of 2")).toBeVisible();
+  });
 });
