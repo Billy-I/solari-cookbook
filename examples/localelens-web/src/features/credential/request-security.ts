@@ -8,6 +8,29 @@ export type AppRequestOptions = {
   requireOrigin: boolean;
 };
 
+function applicationOrigin(request: Request): string {
+  const requestUrl = new URL(request.url);
+  const forwardedProtocol = request.headers.get("x-forwarded-proto");
+  const protocol =
+    forwardedProtocol === "http" || forwardedProtocol === "https"
+      ? `${forwardedProtocol}:`
+      : requestUrl.protocol;
+  const host = request.headers.get("host") ?? requestUrl.host;
+  if (host.includes(",")) throw new Error("INVALID_HOST");
+
+  const reconstructed = new URL(`${protocol}//${host}`);
+  if (
+    reconstructed.username ||
+    reconstructed.password ||
+    reconstructed.pathname !== "/" ||
+    reconstructed.search ||
+    reconstructed.hash
+  ) {
+    throw new Error("INVALID_HOST");
+  }
+  return reconstructed.origin;
+}
+
 export function assertAppRequest(
   request: Request,
   options: AppRequestOptions,
@@ -24,7 +47,7 @@ export function assertAppRequest(
   const origin = request.headers.get("origin");
   if (
     (options.requireOrigin && origin === null) ||
-    (origin !== null && origin !== new URL(request.url).origin)
+    (origin !== null && origin !== applicationOrigin(request))
   ) {
     throw new Error("CROSS_ORIGIN_REQUEST");
   }
@@ -38,13 +61,16 @@ export function assertAppRequest(
 }
 
 export function isSecureApplicationRequest(request: Request): boolean {
-  const forwardedProtocol = request.headers.get("x-forwarded-proto");
-  if (forwardedProtocol !== null) return forwardedProtocol === "https";
-
   const url = new URL(request.url);
-  if (url.protocol === "https:") return true;
-  return (
+  const isLocalHttp =
     url.protocol === "http:" &&
-    ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
-  );
+    ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  const forwardedProtocol = request.headers.get("x-forwarded-proto");
+  if (forwardedProtocol !== null) {
+    return forwardedProtocol === "https" ||
+      (forwardedProtocol === "http" && isLocalHttp);
+  }
+
+  if (url.protocol === "https:") return true;
+  return isLocalHttp;
 }

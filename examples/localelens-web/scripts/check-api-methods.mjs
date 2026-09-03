@@ -202,7 +202,9 @@ async function main() {
           },
         })
     ) {
-      failures.push("Allowed capture POST did not reach the live-disabled route.");
+      failures.push(
+        `Allowed capture POST did not reach the live-disabled route: status ${capture.status}, Cache-Control ${capture.headers["cache-control"] ?? "missing"}, body ${capture.body}`,
+      );
     } else {
       console.log("POST /api/captures: PASS (live-disabled route preserved)");
     }

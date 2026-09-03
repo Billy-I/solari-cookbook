@@ -61,6 +61,52 @@ describe("assertAppRequest", () => {
     ).not.toThrow();
   });
 
+  it("uses the incoming Host when Next canonicalizes the request URL", () => {
+    expect(() =>
+      assertAppRequest(
+        new Request("http://localhost/api/solari-session", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            host: "127.0.0.1:34124",
+            origin: "http://127.0.0.1:34124",
+            "x-forwarded-proto": "http",
+            "x-localelens-request": "1",
+          },
+        }),
+        { requireJson: true, requireOrigin: true },
+      ),
+    ).not.toThrow();
+  });
+
+  it("reconstructs an HTTPS origin without accepting a different host", () => {
+    const headers = {
+      "content-type": "application/json",
+      host: "app.example.test",
+      origin: "https://app.example.test",
+      "x-forwarded-proto": "https",
+      "x-localelens-request": "1",
+    };
+    expect(() =>
+      assertAppRequest(
+        new Request("http://localhost/api/solari-session", {
+          method: "POST",
+          headers,
+        }),
+        { requireJson: true, requireOrigin: true },
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertAppRequest(
+        new Request("http://localhost/api/solari-session", {
+          method: "POST",
+          headers: { ...headers, origin: "https://other.example.test" },
+        }),
+        { requireJson: true, requireOrigin: true },
+      ),
+    ).toThrowError("CROSS_ORIGIN_REQUEST");
+  });
+
   it("permits a missing Origin only when the operation does not require it", () => {
     expect(() =>
       assertAppRequest(
@@ -117,6 +163,14 @@ describe("isSecureApplicationRequest", () => {
     expect(
       isSecureApplicationRequest(
         appRequest("http://example.com/", { "x-forwarded-proto": "https" }),
+      ),
+    ).toBe(true);
+  });
+
+  it("allows Next's forwarded HTTP header on a loopback development host", () => {
+    expect(
+      isSecureApplicationRequest(
+        appRequest("http://127.0.0.1/", { "x-forwarded-proto": "http" }),
       ),
     ).toBe(true);
   });
