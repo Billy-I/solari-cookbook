@@ -11,10 +11,28 @@ describe("toSafeCaptureFailure", () => {
     ["SOLARI_AUTH", "SOLARI_AUTH", false],
     ["SOLARI_CAPACITY", "SOLARI_CAPACITY", true],
     ["SOLARI_PROXY_MISMATCH", "SOLARI_PROXY_MISMATCH", false],
+    ["SOLARI_LAUNCH", "SOLARI_LAUNCH", true],
+    ["NAVIGATION_FAILED", "NAVIGATION_FAILED", true],
+    ["EXTRACTION_FAILED", "EXTRACTION_FAILED", true],
   ])("maps the internal %s category", (message, code, retryable) => {
     expect(toSafeCaptureFailure(new Error(message))).toMatchObject({
       ok: false,
       error: { code, retryable },
+    });
+  });
+
+  it.each([
+    [
+      "SOLARI_LAUNCH",
+      "Solari could not start this regional browser.",
+    ],
+    ["NAVIGATION_FAILED", "The target page could not be loaded."],
+    ["EXTRACTION_FAILED", "Regional evidence could not be extracted."],
+  ])("uses exact safe copy for %s", (code, message) => {
+    expect(toSafeCaptureFailure(new Error(code))).toEqual({
+      ok: false,
+      correlation: null,
+      error: { code, message, retryable: true },
     });
   });
 

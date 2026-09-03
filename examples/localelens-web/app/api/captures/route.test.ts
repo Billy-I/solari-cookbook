@@ -364,6 +364,9 @@ describe("POST /api/captures", () => {
     ["SOLARI_CAPACITY", 503],
     ["SOLARI_AUTH", 503],
     ["SOLARI_PROXY_MISMATCH", 502],
+    ["SOLARI_LAUNCH", 502],
+    ["NAVIGATION_FAILED", 502],
+    ["EXTRACTION_FAILED", 502],
     ["CAPTURE_FAILED", 502],
   ])("maps safe failure %s to status %i", async (code, status) => {
     process.env.LIVE_CAPTURE_ENABLED = "true";

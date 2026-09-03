@@ -248,16 +248,28 @@ describe("captureRegion", () => {
       lifecycle.dependencies,
     );
 
-    expect(result).toMatchObject({ ok: false, error: { code: "CAPTURE_FAILED" } });
+    expect(result).toEqual({
+      ok: false,
+      correlation: null,
+      error: {
+        code: "SOLARI_LAUNCH",
+        message: "Solari could not start this regional browser.",
+        retryable: true,
+      },
+    });
     expect(lifecycle.client.launch).toHaveBeenCalledOnce();
     expect(lifecycle.browser.close).not.toHaveBeenCalled();
     expect(lifecycle.client.close).toHaveBeenCalledOnce();
     expect(lifecycle.registerSession).not.toHaveBeenCalled();
   });
 
-  it.each(["navigation", "extraction", "screenshot"] as const)(
-    "closes browser and client when %s fails",
-    async (failureStage) => {
+  it.each([
+    ["navigation", "NAVIGATION_FAILED"],
+    ["extraction", "EXTRACTION_FAILED"],
+    ["screenshot", "CAPTURE_FAILED"],
+  ] as const)(
+    "reports %s safely and closes browser and client",
+    async (failureStage, code) => {
       const lifecycle = createLifecycle(failureStage);
 
       const result = await captureRegion(
@@ -265,7 +277,11 @@ describe("captureRegion", () => {
         lifecycle.dependencies,
       );
 
-      expect(result).toMatchObject({ ok: false, correlation });
+      expect(result).toMatchObject({
+        ok: false,
+        correlation,
+        error: { code, retryable: true },
+      });
       expect(lifecycle.browser.close).toHaveBeenCalledOnce();
       expect(lifecycle.client.close).toHaveBeenCalledOnce();
     },
@@ -352,7 +368,7 @@ describe("captureRegion", () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: { code: "CAPTURE_FAILED" },
+      error: { code: "NAVIGATION_FAILED" },
     });
     expect(lifecycle.client.close).toHaveBeenCalledOnce();
     expect(log).toHaveBeenCalledWith({

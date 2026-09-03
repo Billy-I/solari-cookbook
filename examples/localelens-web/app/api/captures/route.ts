@@ -90,6 +90,9 @@ function failureStatus(code: CaptureFailure["error"]["code"]): number {
       return 503;
     case "TARGET_BLOCKED":
     case "SOLARI_PROXY_MISMATCH":
+    case "SOLARI_LAUNCH":
+    case "NAVIGATION_FAILED":
+    case "EXTRACTION_FAILED":
     case "CAPTURE_FAILED":
       return 502;
   }

@@ -1,6 +1,7 @@
 import {
   captureRequestSchema,
   captureResponseSchema,
+  SAFE_CAPTURE_ERROR_CODES,
   SUPPORTED_COUNTRIES,
   type CaptureRequest,
   type CaptureCorrelation,
@@ -110,6 +111,33 @@ function timeoutError(): Error {
   return Object.assign(new Error("NAVIGATION_TIMEOUT"), {
     name: "TimeoutError",
   });
+}
+
+function boundaryFailure(
+  error: unknown,
+  fallbackCode: "SOLARI_LAUNCH" | "NAVIGATION_FAILED" | "EXTRACTION_FAILED",
+): unknown {
+  if (typeof error !== "object" || error === null) {
+    return new Error(fallbackCode);
+  }
+
+  const candidate = error as {
+    message?: unknown;
+    name?: unknown;
+    status?: unknown;
+  };
+  if (
+    candidate.name === "TimeoutError" ||
+    typeof candidate.status === "number" ||
+    (typeof candidate.message === "string" &&
+      SAFE_CAPTURE_ERROR_CODES.includes(
+        candidate.message as (typeof SAFE_CAPTURE_ERROR_CODES)[number],
+      ))
+  ) {
+    return error;
+  }
+
+  return new Error(fallbackCode);
 }
 
 async function withTimeout<T>(
@@ -236,7 +264,7 @@ export async function captureRegion(
         ) {
           launchDeadlineExpired = true;
         }
-        throw error;
+        throw boundaryFailure(error, "SOLARI_LAUNCH");
       }
 
       const page = await run(() => browser!.newPage());
@@ -278,7 +306,9 @@ export async function captureRegion(
           }),
         );
       } catch (error) {
-        throw navigationGuardError ?? error;
+        throw (
+          navigationGuardError ?? boundaryFailure(error, "NAVIGATION_FAILED")
+        );
       }
 
       await run(() => page.waitForTimeout(CAPTURE_LIMITS.settleMs));
@@ -294,12 +324,17 @@ export async function captureRegion(
         throw new Error("SOLARI_PROXY_MISMATCH");
       }
 
-      const extracted = await run(() =>
-        page.evaluate(extractPageEvidence, {
-          finalUrl: finalUrl.href,
-          httpStatus: navigationResponse?.status() ?? null,
-        }),
-      );
+      let extracted: ExtractedPageEvidence;
+      try {
+        extracted = await run(() =>
+          page.evaluate(extractPageEvidence, {
+            finalUrl: finalUrl.href,
+            httpStatus: navigationResponse?.status() ?? null,
+          }),
+        );
+      } catch (error) {
+        throw boundaryFailure(error, "EXTRACTION_FAILED");
+      }
       const screenshotBytes = await run(() =>
         page.screenshot({
           type: "jpeg",

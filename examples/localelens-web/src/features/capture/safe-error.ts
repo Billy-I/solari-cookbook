@@ -46,6 +46,18 @@ const safeErrors: Record<
     message: "Solari returned a proxy country that did not match the request.",
     retryable: false,
   },
+  SOLARI_LAUNCH: {
+    message: "Solari could not start this regional browser.",
+    retryable: true,
+  },
+  NAVIGATION_FAILED: {
+    message: "The target page could not be loaded.",
+    retryable: true,
+  },
+  EXTRACTION_FAILED: {
+    message: "Regional evidence could not be extracted.",
+    retryable: true,
+  },
   CAPTURE_FAILED: {
     message: "The regional capture could not be completed.",
     retryable: true,
