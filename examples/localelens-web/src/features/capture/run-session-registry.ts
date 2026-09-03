@@ -12,6 +12,7 @@ const maximumRetainedRuns = 100;
 const registrySymbol = Symbol.for("localelens.run-session-registry");
 
 type RegisterRunSessionInput = {
+  ownerId: string;
   runId: AppRunId;
   country: SupportedCountry;
   attempt: number;
@@ -20,6 +21,7 @@ type RegisterRunSessionInput = {
 
 type SessionRecord = {
   correlation: CaptureCorrelation;
+  ownerId: string;
   sessionId: string;
 };
 
@@ -32,15 +34,22 @@ type RegistryStore = Map<AppRunId, RunRecord>;
 
 export type RunSessionRegistry = {
   register(input: RegisterRunSessionInput): CaptureCorrelation;
-  lookup(correlation: CaptureCorrelation): string | null;
+  lookup(ownerId: string, correlation: CaptureCorrelation): string | null;
+  deleteOwner(ownerId: string): void;
 };
 
 type RegistryOptions = {
   now?: () => number;
 };
 
-function entryKey(country: SupportedCountry, attempt: number): string {
-  return `${country}:${attempt}`;
+const ownerIdPattern = /^[0-9a-f]{64}$/;
+
+function entryKey(
+  ownerId: string,
+  country: SupportedCountry,
+  attempt: number,
+): string {
+  return `${ownerId}:${country}:${attempt}`;
 }
 
 function pruneExpired(store: RegistryStore, now: number): void {
@@ -62,6 +71,9 @@ function registryForStore(
 ): RunSessionRegistry {
   return {
     register(input) {
+      if (!ownerIdPattern.test(input.ownerId)) {
+        throw new Error("Invalid credential owner ID");
+      }
       if (
         typeof input.sessionId !== "string" ||
         input.sessionId.length === 0 ||
@@ -82,8 +94,9 @@ function registryForStore(
         entries: new Map<string, SessionRecord>(),
         updatedAt: timestamp,
       };
-      record.entries.set(entryKey(input.country, input.attempt), {
+      record.entries.set(entryKey(input.ownerId, input.country, input.attempt), {
         correlation,
+        ownerId: input.ownerId,
         sessionId: input.sessionId,
       });
       record.updatedAt = timestamp;
@@ -99,18 +112,30 @@ function registryForStore(
       return correlation;
     },
 
-    lookup(correlation) {
+    lookup(ownerId, correlation) {
+      if (!ownerIdPattern.test(ownerId)) return null;
       const parsed = captureCorrelationSchema.safeParse(correlation);
       if (!parsed.success) return null;
 
       pruneExpired(store, now());
       const record = store.get(parsed.data.runId);
       const entry = record?.entries.get(
-        entryKey(parsed.data.country, parsed.data.attempt),
+        entryKey(ownerId, parsed.data.country, parsed.data.attempt),
       );
       return entry && entry.correlation.sessionRef === parsed.data.sessionRef
         ? entry.sessionId
         : null;
+    },
+
+    deleteOwner(ownerId) {
+      if (!ownerIdPattern.test(ownerId)) return;
+      pruneExpired(store, now());
+      for (const [runId, record] of store) {
+        for (const [key, entry] of record.entries) {
+          if (entry.ownerId === ownerId) record.entries.delete(key);
+        }
+        if (record.entries.size === 0) store.delete(runId);
+      }
     },
   };
 }
@@ -142,7 +167,12 @@ export function registerRunSession(
 }
 
 export function lookupRunSession(
+  ownerId: string,
   correlation: CaptureCorrelation,
 ): string | null {
-  return sharedRegistry.lookup(correlation);
+  return sharedRegistry.lookup(ownerId, correlation);
+}
+
+export function deleteRunSessionsForOwner(ownerId: string): void {
+  sharedRegistry.deleteOwner(ownerId);
 }

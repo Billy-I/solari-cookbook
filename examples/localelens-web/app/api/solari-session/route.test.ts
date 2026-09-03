@@ -5,6 +5,7 @@ const {
   clientClose,
   clientRequest,
   createSolariClient,
+  deleteRunSessionsForOwner,
   sessionsCreate,
   sessionsDelete,
   sessionsResolve,
@@ -12,6 +13,7 @@ const {
   clientClose: vi.fn(),
   clientRequest: vi.fn(),
   createSolariClient: vi.fn(),
+  deleteRunSessionsForOwner: vi.fn(),
   sessionsCreate: vi.fn(),
   sessionsDelete: vi.fn(),
   sessionsResolve: vi.fn(),
@@ -24,6 +26,9 @@ vi.mock("@/src/features/credential/credential-session-store", () => ({
     delete: sessionsDelete,
     resolve: sessionsResolve,
   },
+}));
+vi.mock("@/src/features/capture/run-session-registry", () => ({
+  deleteRunSessionsForOwner,
 }));
 
 import {
@@ -306,6 +311,8 @@ describe("credential lifecycle status and disconnect", () => {
       );
       await expectNoStore(response);
     }
+    expect(deleteRunSessionsForOwner).toHaveBeenCalledOnce();
+    expect(deleteRunSessionsForOwner).toHaveBeenCalledWith("a".repeat(64));
   });
 });
 

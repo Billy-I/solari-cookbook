@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { deleteRunSessionsForOwner } from "@/src/features/capture/run-session-registry";
 import { credentialSessionStore } from "@/src/features/credential/credential-session-store";
 import {
   clearSessionCookie,
@@ -63,7 +64,8 @@ function failure(
 function invalidatePriorSession(request: NextRequest): void {
   const token = readSessionToken(request);
   if (!token) return;
-  credentialSessionStore.delete(token);
+  const ownerId = credentialSessionStore.delete(token);
+  if (ownerId) deleteRunSessionsForOwner(ownerId);
 }
 
 async function readBoundedBody(request: Request): Promise<string> {
