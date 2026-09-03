@@ -4,6 +4,14 @@ Run these steps from `examples/localelens-web/` with Node v22.22.2. Never paste
 a provider key into chat, source, a committed file, a URL, a screenshot, or a
 `NEXT_PUBLIC_*` variable.
 
+The recorded live attempt on 2026-09-03 used DE, FR, GB, and US against
+`https://example.com/`. Run `llr_eed03547-504d-438e-a37d-994f543ea30c`
+settled in batches of three then one, but every market reported Solari
+authentication unavailable. The dashboard stayed at 9 Browser sessions, so
+that attempt proves the UI failure path and batching, not provider-session
+correlation or replay readiness. Do not retry it without a new four-call
+authorization.
+
 ## 1. Start sample mode safely
 
 ```sh
@@ -24,23 +32,54 @@ the fixed target `regional.example.test`, the fixed US/GB/DE markets, and a
 
 ## 3. Start authorized live mode without displaying the key
 
-Stop the sample server first. In a private terminal, read the key without echo
-and export it only for the server process:
+Stop the sample server first. The owner-managed credential is stored as the
+macOS generic-password item with service `com.localelens.solari` and account
+`LocaleLens Production`. Retrieve it only through Security.framework and pass
+it directly to the child process environment. The live evidence run used this
+shape; it exits closed if the item is absent or empty and never prints the
+value:
 
 ```sh
-read -s "SOLARI_API_KEY?Solari API key: "
-printf '\n'
-export SOLARI_API_KEY
-NEXT_PUBLIC_APP_MODE=live LIVE_CAPTURE_ENABLED=true \
-  npm run dev -- --hostname 127.0.0.1 --port 4322
+/usr/bin/swift -e '
+import Foundation
+import Security
+let query: [CFString: Any] = [
+  kSecClass: kSecClassGenericPassword,
+  kSecAttrService: "com.localelens.solari",
+  kSecAttrAccount: "LocaleLens Production",
+  kSecReturnData: true,
+  kSecMatchLimit: kSecMatchLimitOne
+]
+var item: CFTypeRef?
+let status = SecItemCopyMatching(query as CFDictionary, &item)
+guard status == errSecSuccess,
+      let data = item as? Data,
+      let key = String(data: data, encoding: .utf8),
+      !key.isEmpty else {
+  FileHandle.standardError.write(Data("Credential unavailable in Keychain.\n".utf8))
+  exit(2)
+}
+let task = Process()
+task.executableURL = URL(fileURLWithPath: "/Users/billytompazis/.nvm/versions/node/v22.22.2/bin/npm")
+task.arguments = ["run", "dev", "--", "--hostname", "127.0.0.1", "--port", "4323"]
+task.currentDirectoryURL = URL(fileURLWithPath: "/Volumes/SECA-Wikidata/seca-artifacts/LocaleLens/examples/localelens-web")
+var environment = ProcessInfo.processInfo.environment
+environment["PATH"] = "/Users/billytompazis/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+environment["NEXT_DIST_DIR"] = ".next-e2e"
+environment["NEXT_PUBLIC_APP_MODE"] = "live"
+environment["LIVE_CAPTURE_ENABLED"] = "true"
+environment["SOLARI_API_KEY"] = key
+task.environment = environment
+try task.run()
+task.waitUntilExit()
+exit(task.terminationStatus)
+'
 ```
 
 The page must say `Live through Solari.` The key must never appear in the UI or
-browser bundle. After stopping the server, run `unset SOLARI_API_KEY` in that
-terminal. A runtime Keychain or secret-manager injection is preferable for a
-long-lived environment. Owner setup should use a dedicated dashboard key label
-such as `LocaleLens Production`; do not rename or rotate credentials as part of
-this checklist.
+browser bundle. The wrapper keeps the key inside its process environment; it
+does not export it into the invoking shell. Do not create, reveal, rotate,
+rename, or replace the Keychain item as part of this checklist.
 
 ## 4. Select four or more markets and understand batching
 
@@ -102,8 +141,10 @@ unset RAW_SESSION_ID
 
 The `sol_` value is the first 20 hexadecimal digest characters with the prefix.
 Also cross-check the server's safe `session_registered` event for the recorded
-`llr_` run ID and country. Do not attribute Sandbox/VM activity to LocaleLens,
-and do not claim correlation from timestamps alone.
+`llr_` run ID and country. If the dashboard count does not increase, record the
+actual delta and leave correlation unproved, as in the 9-to-9 authentication
+failure above. Do not attribute Sandbox/VM activity to LocaleLens, and do not
+claim correlation from timestamps alone.
 
 ## 11. Test mobile, reflow, and keyboard behavior
 
@@ -116,12 +157,17 @@ be at least 44 by 44 CSS pixels.
 
 ## 12. Stop safely
 
-Press Control-C in the terminal that owns the server. Do not kill broad Node or
-Next process groups. Then clear the runtime variable:
+Press Control-C in the terminal that owns the wrapper. The Swift wrapper can
+leave its npm child running, so verify the exact listener afterward:
 
 ```sh
-unset SOLARI_API_KEY
+lsof -nP -iTCP:4323 -sTCP:LISTEN
 ```
 
-Verify the local listener is gone before starting another mode. Do not push,
-deploy, publish, submit, or release from this checklist.
+If a listener remains, inspect that literal PID and its parent chain with
+`ps -p <PID> -o pid=,ppid=,command=`. Terminate only the exact LocaleLens
+listener process after confirming its working directory is
+`examples/localelens-web`; never use a wildcard, broad process-group kill, or
+kill every Node process. Verify port 4323 has no listener before starting
+another mode. Do not push, deploy, publish, submit, or release from this
+checklist.
