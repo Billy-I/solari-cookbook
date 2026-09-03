@@ -1,131 +1,136 @@
 # LocaleLens
 
-LocaleLens helps product designers, growth teams, localization leads, and QA
-engineers compare how one public HTTPS page renders across selected markets,
-using reviewable evidence rather than an assumed VPN location.
+LocaleLens compares one public HTTPS page across selected markets using live,
+reviewable Solari browser evidence. Every user supplies their own Solari API key
+through the visible masked connection form. LocaleLens has no shipped sample
+mode and no server-owned credential fallback.
 
-![LocaleLens sample comparison at desktop width](../../docs/design/evidence/phase-1-shell-1440x900.jpg)
+## Run locally
 
-## Reviewer journey
+Use Node `v22.22.2` from this directory:
 
-Start in deterministic sample mode: install dependencies, run the app, and
-compare the featured public-page fixture without a Solari key or provider call.
-The interface shows a run receipt, country progress, screenshots, normalized
-evidence differences, redacted JSON export, print output, and replay state.
-
-Solari is essential only for local owner-controlled live mode. It launches one
-recorded regional browser per selected country through a residential proxy,
-checks the matching proxy-country receipt, captures bounded page evidence, and
-allows an explicit replay lookup. Tests, evidence, and the limits of each
-evidence class are linked below; sample checks do not prove provider, hosted,
-or assistive-technology behavior.
-
-## What is shipped
-
-- One public HTTPS target, compared across two or three supported countries.
-- Deterministic sample results with no capture or replay API request.
-- Independent country progress, partial results, and one explicit failed-country retry.
-- Bounded screenshots and normalized URL, language, title, heading, CTA,
-  currency, consent, status, and timestamp evidence.
-- Side-by-side screenshots, difference states, redacted JSON export, print,
-  and safe replay pending, ready, or unavailable presentation.
-
-## Provenance and mode boundary
-
-Sample mode is deterministic local fixture evidence. It is the normal local
-and public-safe mode and uses `NEXT_PUBLIC_APP_MODE=sample` with
-`LIVE_CAPTURE_ENABLED=false`. It spends zero Solari credits.
-
-Live mode is local and owner-controlled. It requires
-`LIVE_CAPTURE_ENABLED=true` and the server-only `SOLARI_API_KEY`; never place
-the key in client code, a `NEXT_PUBLIC_` variable, committed files, logs,
-screenshots, or documentation. A live run uses Solari Browser with stealth,
-residential proxy egress, recording, receipt validation, bounded extraction,
-and an explicit replay lookup. No automatic capture retry occurs.
-
-## Architecture
-
-```mermaid
-flowchart LR
-    U[User] --> F[Next.js client page]
-    F -->|one POST per country| R[Capture route]
-    R --> V[HTTPS and country validation]
-    V --> S[Solari cloud browser]
-    S --> P[Public target page]
-    P --> E[Deterministic evidence extractor]
-    E --> C[Capture result]
-    C --> F
-    F --> D[Local comparison and exports]
-    R -->|after close| Q[Replay lookup route]
-    Q --> F
-```
-
-In sample mode, the client uses deterministic fixtures without calling either
-route. Owner-controlled local live mode follows the diagram: each selected
-country is an independent request, and the capture route closes before replay
-lookup. There is no account system, database, queue, background worker,
-analytics pipeline, or model provider.
-
-## Local setup
-
-From the cookbook root, use Node `v22.22.2`:
-
-```bash
+```sh
 cd examples/localelens-web
-nvm install 22.22.2
 nvm use 22.22.2
-node --version
 npm install
 npm run dev
 ```
 
-Open the local URL printed by Next.js and use sample mode. For an authorized
-local live proof only, load the server-only `SOLARI_API_KEY` from a local secret
-path and set `LIVE_CAPTURE_ENABLED=true`. Keep live mode disabled for normal
-development and any public-safe sample deployment.
+Open the local URL printed by Next.js. Obtain a key from
+<https://console.getsolari.com/>. Solari displays a newly created key once, so
+copy it when it is created and keep it private. Enter it only in LocaleLens's
+visible password field, then press **Use my Solari key**. Never put a key in
+chat, source, a file, a URL, a screenshot, an environment variable, or browser
+developer tools.
 
-## Verification and evidence
+## Connection lifecycle
 
-Run non-live checks from `examples/localelens-web/`:
+The connect action makes one non-capture authentication request to Solari. On
+success, LocaleLens clears the field and shows **Ready for this session**. The
+raw key exists only in server-process memory behind a random HttpOnly,
+SameSite=Strict session cookie; the cookie contains an opaque token, not the
+key. The key is not written to local storage, session storage, IndexedDB, the
+Cache API, analytics, telemetry, logs, exports, or committed evidence.
 
-```bash
+Credential sessions expire after 30 minutes without use or eight hours
+absolutely. A server restart forgets every session. Browser restore may retain
+an opaque session cookie while the restarted server has no matching key; the
+next status check then returns to the disconnected state. **Disconnect**
+deletes the credential session and every replay/capture reference owned by it,
+then clears the cookie. Closing the exact server process also destroys all
+in-memory keys.
+
+This implementation supports one application process. Multi-instance hosting
+would require a separately designed shared secret store and is not claimed.
+Production use requires HTTPS so the session cookie can be Secure. Localhost is
+the supported development exception.
+
+## Capture and credit boundary
+
+Enter one public HTTPS target and select two to five markets. Pressing
+**Compare live through Solari** creates exactly one initial Solari browser
+capture per selected country and may consume one unit of the user's Solari
+credits per country. Authentication does not authorize a capture. LocaleLens
+batches at most three captures concurrently and never retries automatically.
+Each visible **Retry** action creates one additional capture and therefore
+requires a separate spend decision.
+
+`SOLARI_CAPTURE_DISABLED=true` is a server-side emergency disable-only switch.
+It cannot enable capture, provide a key, or select a mode. Normal operation does
+not require credential or mode environment variables.
+
+## Recognize real results
+
+A run begins only after the visible compare action and receives an `llr_`
+application run ID. Successful country cards say **Live evidence** and show the
+requested/final URL, capture time, bounded screenshot, normalized evidence,
+proxy-country receipt, and an app-owned `sol_` correlation reference when one
+is available. Reports use schema version 3 and
+`"provenance": "live_solari"`. There is no fixture fallback.
+
+Failures remain failures. Safe UI categories include invalid authentication,
+temporary authentication or provider unavailability, capacity, timeout,
+proxy-country mismatch, invalid target/response, and generic capture failure.
+Provider bodies, raw provider session IDs, credentials, cookies, and request
+headers are not shown. Partial evidence remains reviewable when at least two
+countries succeed.
+
+## Safe stopping
+
+Before a live run, record the exact public URL, selected country names/codes,
+and initial capture count. Press compare once only after approving that count.
+Do not press retry without approving the additional call. When finished, press
+**Disconnect**, stop the exact terminal-owned server process, and verify its
+literal port has no listener before starting another server. Do not use broad
+process termination commands.
+
+## Architecture and boundaries
+
+```mermaid
+flowchart LR
+    U[User] -->|masked key form| A[Session route]
+    A -->|one authentication request| S[Solari]
+    A -->|opaque HttpOnly cookie| B[Browser]
+    B -->|one POST per selected country| C[Capture route]
+    C -->|in-memory user credential| S
+    S --> P[Public HTTPS target]
+    P --> E[Bounded evidence extractor]
+    E --> B
+    C -->|owned safe reference| R[Replay route]
+```
+
+Targets reject credentials, fragments, non-default ports, local/private hosts,
+and unsafe DNS results. Capture and replay requests require the opaque local
+session, custom request header, same-origin checks, bounded bodies, and strict
+response contracts. Session ownership prevents one connected browser from
+reading another browser's run references.
+
+Historical sample artifacts remain only in archived documentation and governed
+evidence. Current unit tests use test-only factories, and Playwright installs a
+browser-route double exclusively under `e2e/`; neither is imported by production
+source or emitted into the production bundle.
+
+## Verification
+
+Run the credential-free gate from this directory:
+
+```sh
+node --version
 npm test
 npm run typecheck
 npm run lint
-NEXT_PUBLIC_APP_MODE=sample npm run build
+SOLARI_API_KEY=synthetic-secret-build-canary npm run build
 npm run check:budget
-npm run test:e2e
 npm run check:api-methods
-npm ls --depth=0
+npm run check:production-boundaries
+npm run test:e2e
 ```
 
-The accepted Phase 4 local gate passed 23 Vitest files / 234 tests, sample
-build, budget, and 11/11 sample Playwright tests with zero capture/replay API
-requests. Its bounded live evidence used exactly four captures for Spotify
-Premium: US, GB, DE, and one explicit GB retry; six replay lookups were
-recorded separately. See the [execution index](../../docs/EXECUTION_INDEX.md),
-[Phase 4 evidence](docs/evidence/phase-4.md), [security review](docs/evidence/security-review.md),
-[visual review](docs/evidence/visual-review.md), and [approved design](../../docs/superpowers/specs/2026-09-01-localelens-design.md).
+The synthetic build canary is deliberately not a usable key. The build and
+boundary checks prove that even this sentinel cannot become a runtime fallback
+or leak into client/static or rendered server output. Playwright evidence uses
+only synthetic `.test` responses and does not prove the live Solari provider,
+dashboard, hosted deployment, or direct assistive-technology behavior.
 
-## Security, privacy, and limitations
-
-Only server routes access `SOLARI_API_KEY` at request time. Targets must be
-public HTTPS addresses and pass hostname and DNS-address validation; credentials,
-fragments, non-default ports, local hosts, and private or reserved addresses are
-rejected. Live/provider screenshots, session IDs, replay URLs, raw page text,
-provider bodies, and environment values are excluded from logs and committed
-evidence. The sample screenshot above is intentionally committed reviewer
-evidence.
-
-This is qualified local evidence, not a production claim. Hosted or deployed
-behavior, direct screen-reader or VoiceOver output, actual browser-chrome 200%
-zoom, Browser reduced motion, live-only mobile and tablet transient states, raw
-provider receipts or tier data, provider-console cleanup, and the application
-method contract for `TRACE` remain `NOT PROVEN` as detailed in Phase 4 evidence.
-
-## Phase boundary
-
-Phase 4 is owner accepted at `ec05f42bfadce32a406ffd1e883c03582aacfb90`.
-Phase 5 Tasks 1–3 are locally frozen with concerns. Task 4 is not started.
-Push, deployment, publication, submission, posting, pull request, and merge
-remain unauthorized.
+See [manual acceptance](docs/evidence/live-product-readiness/manual-acceptance.md)
+and the [BYOK live-only evidence report](docs/evidence/byok-live-only.md).

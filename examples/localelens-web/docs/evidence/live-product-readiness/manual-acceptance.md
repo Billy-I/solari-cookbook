@@ -1,173 +1,142 @@
-# LocaleLens Live Product Readiness manual acceptance
+# LocaleLens user-owned Solari key manual acceptance
 
-Run these steps from `examples/localelens-web/` with Node v22.22.2. Never paste
-a provider key into chat, source, a committed file, a URL, a screenshot, or a
-`NEXT_PUBLIC_*` variable.
+This procedure is for one owner-authorized local live acceptance. It does not
+authorize deployment, release, a pull request, or any capture beyond the exact
+count approved at action time. Use Node `v22.22.2` and never expose a real key
+in chat, a terminal, an environment variable, a file, a URL, a screenshot,
+logs, request inspection, browser storage inspection, or committed evidence.
 
-The recorded live attempt on 2026-09-03 used DE, FR, GB, and US against
-`https://example.com/`. Run `llr_eed03547-504d-438e-a37d-994f543ea30c`
-settled in batches of three then one, but every market reported Solari
-authentication unavailable. The dashboard stayed at 9 Browser sessions, so
-that attempt proves the UI failure path and batching, not provider-session
-correlation or replay readiness. Do not retry it without a new four-call
-authorization.
+## 1. Pass the complete credential-free gate
 
-## 1. Start sample mode safely
+From `examples/localelens-web/`, run:
 
 ```sh
-env -u SOLARI_API_KEY \
-  NEXT_PUBLIC_APP_MODE=sample \
-  LIVE_CAPTURE_ENABLED=false \
-  npm run dev -- --hostname 127.0.0.1 --port 4322
+node --version
+npm test
+npm run typecheck
+npm run lint
+SOLARI_API_KEY=synthetic-secret-build-canary npm run build
+npm run check:budget
+npm run check:api-methods
+npm run check:production-boundaries
+npm run test:e2e
 ```
 
-Open the printed local URL. Sample mode cannot call the live route because the
-server gate is false and no key is present.
+Require Node `v22.22.2` and a pass from every command. The value used for the
+build is a non-secret sentinel that verifies there is no environment fallback.
+If any command fails, stop. Live acceptance is `NOT RUN`.
 
-## 2. Recognize demo truth
+## 2. Start one exact server
 
-Confirm the form says `Demo data — this URL will not be visited.` It must show
-the fixed target `regional.example.test`, the fixed US/GB/DE markets, and a
-`Run featured demo` button. There must be no editable URL or market checkbox.
-
-## 3. Start authorized live mode without displaying the key
-
-Stop the sample server first. The owner-managed credential is stored as the
-macOS generic-password item with service `com.localelens.solari` and account
-`LocaleLens Production`. Retrieve it only through Security.framework and pass
-it directly to the child process environment. The live evidence run used this
-shape; it exits closed if the item is absent or empty and never prints the
-value:
+Choose one localhost port only after confirming it has no listener:
 
 ```sh
-/usr/bin/swift -e '
-import Foundation
-import Security
-let query: [CFString: Any] = [
-  kSecClass: kSecClassGenericPassword,
-  kSecAttrService: "com.localelens.solari",
-  kSecAttrAccount: "LocaleLens Production",
-  kSecReturnData: true,
-  kSecMatchLimit: kSecMatchLimitOne
-]
-var item: CFTypeRef?
-let status = SecItemCopyMatching(query as CFDictionary, &item)
-guard status == errSecSuccess,
-      let data = item as? Data,
-      let key = String(data: data, encoding: .utf8),
-      !key.isEmpty else {
-  FileHandle.standardError.write(Data("Credential unavailable in Keychain.\n".utf8))
-  exit(2)
-}
-let task = Process()
-task.executableURL = URL(fileURLWithPath: "/Users/billytompazis/.nvm/versions/node/v22.22.2/bin/npm")
-task.arguments = ["run", "dev", "--", "--hostname", "127.0.0.1", "--port", "4323"]
-task.currentDirectoryURL = URL(fileURLWithPath: "/Volumes/SECA-Wikidata/seca-artifacts/LocaleLens/examples/localelens-web")
-var environment = ProcessInfo.processInfo.environment
-environment["PATH"] = "/Users/billytompazis/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-environment["NEXT_DIST_DIR"] = ".next-e2e"
-environment["NEXT_PUBLIC_APP_MODE"] = "live"
-environment["LIVE_CAPTURE_ENABLED"] = "true"
-environment["SOLARI_API_KEY"] = key
-task.environment = environment
-try task.run()
-task.waitUntilExit()
-exit(task.terminationStatus)
-'
+lsof -nP -iTCP:<PORT> -sTCP:LISTEN
+npm run dev -- --hostname 127.0.0.1 --port <PORT>
 ```
 
-The page must say `Live through Solari.` The key must never appear in the UI or
-browser bundle. The wrapper keeps the key inside its process environment; it
-does not export it into the invoking shell. Do not create, reveal, rotate,
-rename, or replace the Keychain item as part of this checklist.
+Use the normal command with no key, mode, or enable flag. Record the literal
+port, server PID, parent PID, command, and working directory. Do not reuse an
+unverified listener or start a second server.
 
-## 4. Select four or more markets and understand batching
+## 3. Inspect the disconnected UI in the in-app Browser
 
-Enter one public HTTPS URL. Select four markets. The product supports only the
-15 listed, SDK-proved residential proxy codes. Three is the maximum concurrent
-transport count, not the total selection limit. Four markets should display two
-batches: three captures, then one. Do not interpret a listed market as a
-guarantee that every target will render there.
+Open the exact local URL in the named in-app Browser. Before entering a key,
+verify at 1440×900, 640×720, and 360×800:
 
-## 5. Follow run states
+- **Solari connection** guidance and the external key link are visible.
+- **Solari API key** is a password field.
+- URL and market inputs are usable, but **Compare live through Solari** is
+  disabled.
+- There are no sample/demo results, fixture hosts, receipts, regional results,
+  or export actions.
+- Keyboard focus is visible, layout reflows without horizontal overflow, and
+  the browser console has no errors.
 
-Press `Compare live through Solari` once. Observe selected, queued, running,
-completed, failed, current-batch, and total-batch values. Country rows advance
-through launch, navigation, extraction, closing, and a terminal state. `Cancel
-comparison` must stop later work and ignore stale completions.
+Do not enter any key and do not start a capture during this inspection.
 
-## 6. Verify Solari provenance
+## 4. Hand off visible key entry to the owner
 
-Confirm the live label, record the displayed `llr_` application run ID, and
-record each safe `sol_` country correlation shown for a success or correlated
-failure. These are app-owned references; they are not raw provider session IDs.
-Do not count sample results as provider evidence.
+The owner takes control of the visible Browser, enters their own key into the
+masked field, and presses **Use my Solari key**. The operator must not type,
+paste, read, copy, inspect, or automate the key. Do not inspect cookies, local
+storage, password managers, headers, payloads, or developer tools after
+handback.
 
-## 7. Retry one failed market
+Record the single connection action separately from capture calls. Confirm only
+that the UI says **Ready for this session**, the password field no longer
+echoes anything, and comparison is enabled. Authentication does not authorize
+a capture.
 
-Use only that country row's explicit retry action. A retry preserves successful
-siblings and makes one additional provider call. The four-call readiness proof
-does not authorize that fifth call: obtain separate owner authorization first.
-There is no automatic provider retry.
+## 5. State and approve the exact spend proposal
 
-## 8. Read decisions before raw evidence
+Before pressing compare, state all of the following in one approval request:
 
-Read `What changed` first: evidence availability, routing, localization, and
-consent. Then open `Screenshots and regional evidence` and `Detailed field
-comparison` to inspect the underlying evidence. The summary is directional,
-not a compliance verdict.
+- the exact public HTTPS target URL;
+- every selected country code and country name;
+- the exact number of initial captures, equal to the selected-country count;
+- that each country starts one Solari browser capture and may consume the
+  owner's Solari credits;
+- that no retry is included.
 
-## 9. Check partial success
+Wait for explicit action-time approval of that exact target, selection, and
+count. A prior plan approval, successful authentication, or general permission
+to test is not capture approval.
 
-When at least two countries succeed and another fails, confirm the two
-successful countries still have meaningful comparisons. The failed country is
-reported separately. If fewer than two succeed, comparison rows must remain
-honestly unavailable.
+## 6. Run only through the visible UI
 
-## 10. Cross-check the Solari dashboard
+After approval, press **Compare live through Solari** exactly once in the
+in-app Browser. Do not call capture or replay routes with curl, scripts, tests,
+developer tools, or direct HTTP clients. Observe batches of no more than three,
+the cancel action while work is pending, and one terminal success or honest
+failure per selected country. There must be no fixture fallback.
 
-Record the Browser-session count immediately before and after the one UI run.
-For the planned four-country run, it must increase by exactly four before that
-count is treated as evidence. Match country, creation time, and duration. To
-match a dashboard raw session ID to an app `sol_` reference without printing
-the raw value, enter it hidden in a private terminal and hash it:
+Record the exact initial capture count. If a retryable failure appears, report
+the failed country and current count, then request separate approval for one
+additional capture. Press that country's **Retry** button only after approval.
+Never retry automatically or silently.
+
+## 7. Verify result and dashboard truth
+
+Successful cards must say **Live evidence** and show real capture timestamps,
+final URLs, screenshots, and safe app-owned correlation references. Failed
+cards must remain failures. A partial result is valid only when successful
+siblings remain reviewable; it is not a complete-provider claim.
+
+In the Solari console, compare the owner-visible Browser session count before
+and after the approved action. The expected delta is the exact initial capture
+count plus separately approved retries. Correlate only safe country and time
+facts. Do not record or expose raw provider session IDs, profile data, key
+material, cookies, request headers, or payloads. If the delta or safe facts do
+not agree, record the actual observation and mark dashboard correlation
+`NOT PROVEN`.
+
+## 8. Disconnect and stop the exact process
+
+Press **Disconnect** in LocaleLens. Confirm the password form returns and the
+compare action is blocked. A status refresh must report the local credential
+session as missing, and prior replay/capture references must no longer be
+available to that browser session.
+
+Stop the exact terminal-owned server process, then verify:
 
 ```sh
-read -s "RAW_SESSION_ID?Dashboard session ID: "
-printf '\n'
-printf %s "$RAW_SESSION_ID" | shasum -a 256
-unset RAW_SESSION_ID
+lsof -nP -iTCP:<PORT> -sTCP:LISTEN
 ```
 
-The `sol_` value is the first 20 hexadecimal digest characters with the prefix.
-Also cross-check the server's safe `session_registered` event for the recorded
-`llr_` run ID and country. If the dashboard count does not increase, record the
-actual delta and leave correlation unproved, as in the 9-to-9 authentication
-failure above. Do not attribute Sandbox/VM activity to LocaleLens, and do not
-claim correlation from timestamps alone.
+If a listener remains, inspect only that literal PID and parent chain with
+`ps -p <PID> -o pid=,ppid=,command=` and confirm its working directory before
+terminating it. Do not use wildcards, process-name killing, broad process-group
+termination, or commands that affect unrelated Node processes. Record the
+empty listener check as server-shutdown proof.
 
-## 11. Test mobile, reflow, and keyboard behavior
+## 9. Record evidence and stop
 
-At 360 and 640 CSS pixels, confirm there is no page-level horizontal overflow,
-the compact comparison is readable, and decision and export content is not
-lost. With a keyboard, Tab through `How it works`, the primary action,
-disclosures, table scroll region, download, and print. Each focused control
-must have a visible outline. With a coarse pointer, interactive targets should
-be at least 44 by 44 CSS pixels.
+Record authentication-request count, initial capture count, separately
+approved retry count, each country outcome, dashboard delta/result, UI
+disconnect proof, exact-process shutdown proof, protected-path status, and any
+remaining risk. Do not include secrets or raw provider identifiers.
 
-## 12. Stop safely
-
-Press Control-C in the terminal that owns the wrapper. The Swift wrapper can
-leave its npm child running, so verify the exact listener afterward:
-
-```sh
-lsof -nP -iTCP:4323 -sTCP:LISTEN
-```
-
-If a listener remains, inspect that literal PID and its parent chain with
-`ps -p <PID> -o pid=,ppid=,command=`. Terminate only the exact LocaleLens
-listener process after confirming its working directory is
-`examples/localelens-web`; never use a wildcard, broad process-group kill, or
-kill every Node process. Verify port 4323 has no listener before starting
-another mode. Do not push, deploy, publish, submit, or release from this
-checklist.
+Commit final evidence and push the approved branch once only after all required
+checks and live acceptance are complete. Do not open a PR, merge, deploy,
+release, inspect hosted CI, or modify repository settings.
