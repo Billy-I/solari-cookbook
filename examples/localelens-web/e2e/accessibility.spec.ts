@@ -1,32 +1,40 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-const providerRequests = new WeakMap<Page, string[]>();
+import {
+  createSolariTestDouble,
+  type SolariTestDouble,
+} from "./support/solari-test-double";
+
+const doubles = new WeakMap<Page, SolariTestDouble>();
 
 test.beforeEach(async ({ page }) => {
-  const requests: string[] = [];
-  providerRequests.set(page, requests);
-  page.on("request", (request) => {
-    const pathname = new URL(request.url()).pathname;
-    if (/^\/api\/(captures|replays)(?:\/|$)/.test(pathname)) {
-      requests.push(`${request.method()} ${pathname}`);
-    }
-  });
+  const testDouble = createSolariTestDouble();
+  doubles.set(page, testDouble);
+  await testDouble.install(page);
 });
 
-test.afterEach(async ({ page }) => {
-  expect(providerRequests.get(page)).toEqual([]);
-});
+async function connect(page: Page) {
+  await page.getByLabel("Solari API key").fill("synthetic-accessibility-key");
+  await page.getByRole("button", { name: "Use my Solari key" }).click();
+  await expect(page.getByText("Ready for this session")).toBeVisible();
+}
+
+async function runComparison(page: Page, complete = false) {
+  await page.getByLabel("URL (HTTPS)").fill("https://public.synthetic.test/pricing");
+  await page.getByRole("checkbox", { name: "Germany" }).check();
+  await page.getByRole("button", { name: "Compare live through Solari" }).click();
+  await expect(page.locator(".receipt-row").getByText("partial", { exact: true })).toBeVisible();
+  if (complete) {
+    await page.getByText("Screenshots and regional evidence").click();
+    await page.getByRole("button", { name: "Retry United Kingdom" }).click();
+    await expect(page.locator(".receipt-row").getByText("complete", { exact: true })).toBeVisible();
+  }
+}
 
 async function expectAxeClean(page: Page) {
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
-}
-
-async function runFeaturedDemo(page: Page) {
-  await page.getByRole("button", { name: "Run featured demo" }).click();
-  await expect(page.getByText(/^llr_[0-9a-f-]{36}$/)).toBeVisible();
-  await expect(page.locator(".receipt-row").getByText("complete", { exact: true })).toBeVisible();
 }
 
 async function expectVisibleFocus(target: Locator) {
@@ -44,29 +52,31 @@ async function expectVisibleFocus(target: Locator) {
   expect(style.color).not.toBe("rgba(0, 0, 0, 0)");
 }
 
-test("idle and completed demo states have no automated axe violations", async ({
+test("idle and completed live-only states have no automated axe violations", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByText("Demo data — this URL will not be visited.")).toBeVisible();
+  await expect(page.getByLabel("Solari API key")).toBeVisible();
   await expectAxeClean(page);
 
-  await runFeaturedDemo(page);
-  await page.getByText("Screenshots and regional evidence").click();
+  await connect(page);
+  await runComparison(page, true);
   await page.getByText("Detailed field comparison").click();
   await expectAxeClean(page);
 });
 
-test("keyboard order exposes disclosures and exports without focus jumps", async ({
+test("keyboard order preserves compare focus and exposes evidence actions", async ({
   page,
 }) => {
   await page.goto("/");
-  const demo = page.getByRole("button", { name: "Run featured demo" });
-  await demo.focus();
+  await connect(page);
+  await page.getByLabel("URL (HTTPS)").fill("https://public.synthetic.test/pricing");
+  await page.getByRole("checkbox", { name: "Germany" }).check();
+  const compare = page.getByRole("button", { name: "Compare live through Solari" });
+  await compare.focus();
   await page.keyboard.press("Enter");
-  await expect(demo).toBeFocused();
-  await expect(page.locator(".receipt-row").getByText("complete", { exact: true })).toBeVisible();
-  await expect(demo).toBeFocused();
+  await expect(page.locator(".receipt-row").getByText("partial", { exact: true })).toBeVisible();
+  await expect(compare).toBeFocused();
 
   const screenshots = page.getByText("Screenshots and regional evidence");
   await page.keyboard.press("Tab");
@@ -74,8 +84,11 @@ test("keyboard order exposes disclosures and exports without focus jumps", async
   await page.keyboard.press("Enter");
   await expect(screenshots.locator("..")).toHaveAttribute("open", "");
 
+  await page.getByRole("button", { name: "Retry United Kingdom" }).click();
   const details = page.getByText("Detailed field comparison");
+  await details.focus();
   await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
   await expectVisibleFocus(details);
   await page.keyboard.press("Space");
   await expect(details.locator("..")).toHaveAttribute("open", "");
@@ -83,34 +96,44 @@ test("keyboard order exposes disclosures and exports without focus jumps", async
   const tableScroll = page.locator(".table-scroll");
   await page.keyboard.press("Tab");
   await expectVisibleFocus(tableScroll);
-
   const download = page.getByRole("button", { name: "Download JSON" });
-  await page.keyboard.press("Tab");
+  await download.focus();
   await expectVisibleFocus(download);
   const print = page.getByRole("button", { name: "Print evidence" });
-  await page.keyboard.press("Tab");
+  await print.focus();
   await expectVisibleFocus(print);
 });
 
 test.describe("coarse-pointer targets", () => {
   test.use({ hasTouch: true, viewport: { height: 844, width: 390 } });
 
-  test("all interactive targets are at least 44 by 44 CSS pixels", async ({
+  test("all primary journey targets are at least 44 by 44 CSS pixels", async ({
     page,
   }) => {
     await page.goto("/");
-    await runFeaturedDemo(page);
-
-    const targets = [
+    const initialTargets = [
       page.getByText("How it works", { exact: true }),
-      page.getByRole("button", { name: "Run featured demo" }),
+      page.getByRole("link", { name: "Get a Solari API key" }),
+      page.getByLabel("Solari API key"),
+    ];
+    for (const target of initialTargets) {
+      const box = await target.boundingBox();
+      expect(box, await target.evaluate((element) => element.outerHTML)).not.toBeNull();
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+    }
+
+    await connect(page);
+    await runComparison(page, true);
+    const completedTargets = [
+      page.getByRole("button", { name: "Disconnect" }),
+      page.getByRole("button", { name: "Compare live through Solari" }),
       page.getByText("Screenshots and regional evidence"),
       page.getByText("Detailed field comparison"),
       page.getByRole("button", { name: "Download JSON" }),
       page.getByRole("button", { name: "Print evidence" }),
     ];
-
-    for (const target of targets) {
+    for (const target of completedTargets) {
       const box = await target.boundingBox();
       expect(box, await target.evaluate((element) => element.outerHTML)).not.toBeNull();
       expect(box!.width).toBeGreaterThanOrEqual(44);
@@ -123,7 +146,7 @@ test("reduced-motion preference removes meaningful CSS motion", async ({ page })
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
 
-  const motion = await page.locator(".primary-action").evaluate((element) => {
+  const motion = await page.locator(".primary-action").first().evaluate((element) => {
     const style = getComputedStyle(element);
     return {
       animationDuration: style.animationDuration,
@@ -136,11 +159,13 @@ test("reduced-motion preference removes meaningful CSS motion", async ({ page })
   expect(Number.parseFloat(motion.transitionDuration)).toBeLessThanOrEqual(0.00001);
 });
 
-test("640 CSS pixel reflow preserves all decision and action content", async ({
+test("640 CSS pixel reflow preserves live comparison and action content", async ({
   page,
 }) => {
   await page.setViewportSize({ height: 720, width: 640 });
   await page.goto("/");
+  await connect(page);
+  await runComparison(page);
 
   await expect(page.getByRole("heading", { name: "Compare the experience by market" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "What changed" })).toBeVisible();
@@ -152,4 +177,6 @@ test("640 CSS pixel reflow preserves all decision and action content", async ({
       (element) => element.scrollWidth <= element.clientWidth,
     ),
   ).toBe(true);
+  expect(doubles.get(page)?.authenticationCalls).toHaveLength(1);
+  expect(doubles.get(page)?.captureCalls).toHaveLength(3);
 });

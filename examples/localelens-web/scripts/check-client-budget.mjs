@@ -5,6 +5,12 @@ import { gzipSync } from "node:zlib";
 const BUDGET_BYTES = 180 * 1024;
 const BUILD_DIRECTORY = resolve(process.cwd(), ".next");
 const MAIN_ROUTE = "/";
+const FORBIDDEN_CLIENT_MARKERS = [
+  "SOLARI_API_KEY",
+  "credential-session-store",
+  "createSolariClient",
+  "synthetic-secret-build-canary",
+];
 
 function fail(message) {
   throw new Error(message);
@@ -148,9 +154,16 @@ async function main() {
     }
 
     try {
+      const source = await readFile(absolutePath);
+      const text = source.toString("utf8");
+      for (const marker of FORBIDDEN_CLIENT_MARKERS) {
+        if (text.includes(marker)) {
+          fail(`Main-route client chunk contains forbidden marker ${marker}: ${chunk}`);
+        }
+      }
       rows.push({
         chunk,
-        bytes: gzipSync(await readFile(absolutePath)).length,
+        bytes: gzipSync(source).length,
       });
     } catch (error) {
       fail(`Cannot read main-route client chunk (${chunk}): ${error.message}`);

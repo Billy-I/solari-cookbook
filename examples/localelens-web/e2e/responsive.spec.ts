@@ -1,20 +1,17 @@
 import { expect, test } from "@playwright/test";
 
-test("360 CSS pixel demo reflows without provider traffic or hidden decisions", async ({
+import { createSolariTestDouble } from "./support/solari-test-double";
+
+test("360 CSS pixel live-only journey reflows without hidden evidence", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   const consoleErrors: string[] = [];
-  const providerRequests: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
-  page.on("request", (request) => {
-    const pathname = new URL(request.url()).pathname;
-    if (/^\/api\/(captures|replays)(?:\/|$)/.test(pathname)) {
-      providerRequests.push(`${request.method()} ${pathname}`);
-    }
-  });
+  const testDouble = createSolariTestDouble();
+  await testDouble.install(page);
   await page.addInitScript(() => {
     window.print = () => {
       document.documentElement.dataset.printOpened = "true";
@@ -22,22 +19,21 @@ test("360 CSS pixel demo reflows without provider traffic or hidden decisions", 
   });
 
   await page.goto("/");
-  await expect(page.getByText("Demo data — this URL will not be visited.")).toBeVisible();
+  await expect(page.getByText(/sample|demo/i)).toHaveCount(0);
+  await page.getByLabel("Solari API key").fill("synthetic-responsive-key");
+  expect(testDouble.captureCalls).toHaveLength(0);
+  await page.getByRole("button", { name: "Use my Solari key" }).click();
+  await expect(page.getByText("Ready for this session")).toBeVisible();
+  await page.getByLabel("URL (HTTPS)").fill("https://public.synthetic.test/pricing");
+  await page.getByRole("checkbox", { name: "Germany" }).check();
+  await page.getByRole("button", { name: "Compare live through Solari" }).click();
+  await expect(page.locator(".receipt-row").getByText("partial", { exact: true })).toBeVisible();
+  expect(testDouble.authenticationCalls).toHaveLength(1);
+  expect(testDouble.captureCalls).toHaveLength(3);
+
   await expect(page.getByRole("heading", { name: "What changed" })).toBeVisible();
-  await expect(page.getByText("Screenshots and regional evidence")).toBeVisible();
-  await expect(page.getByText("Detailed field comparison")).toBeVisible();
-
-  await page.getByRole("button", { name: "Run featured demo" }).click();
-  await expect(page.getByText(/^llr_[0-9a-f-]{36}$/)).toBeVisible();
-  await expect(page.locator(".receipt-row").getByText("complete", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("status", { name: "Comparison status" }).getByText("Complete", {
-      exact: true,
-    }),
-  ).toHaveCount(3);
-
   await page.getByText("Screenshots and regional evidence").click();
-  await expect(page.getByRole("article", { name: /regional evidence$/ })).toHaveCount(3);
+  await expect(page.getByRole("article", { name: /regional evidence/ })).toHaveCount(3);
   await page.getByText("Detailed field comparison").click();
   await expect(
     page.getByLabel("Captured field differences by market, compact view"),
@@ -54,6 +50,5 @@ test("360 CSS pixel demo reflows without provider traffic or hidden decisions", 
       (element) => element.scrollWidth <= element.clientWidth,
     ),
   ).toBe(true);
-  expect(providerRequests).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });

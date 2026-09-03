@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { createSolariTestDouble } from "./support/solari-test-double";
+
 function observeConsoleErrors(page: Page) {
   const errors: string[] = [];
   page.on("console", (message) => {
@@ -8,23 +10,13 @@ function observeConsoleErrors(page: Page) {
   return errors;
 }
 
-function observeProviderRoutes(page: Page) {
-  const providerRequests: string[] = [];
-  page.on("request", (request) => {
-    const pathname = new URL(request.url()).pathname;
-    if (/^\/api\/(captures|replays)(?:\/|$)/.test(pathname)) {
-      providerRequests.push(`${request.method()} ${pathname}`);
-    }
-  });
-  return providerRequests;
-}
-
-test("desktop featured demo is fixed, decision-first, and provider-free", async ({
+test("desktop connection and comparison are explicit, live-only, and retry-safe", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const consoleErrors = observeConsoleErrors(page);
-  const providerRequests = observeProviderRoutes(page);
+  const testDouble = createSolariTestDouble();
+  await testDouble.install(page);
   await page.addInitScript(() => {
     window.print = () => {
       document.documentElement.dataset.printOpened = "true";
@@ -32,51 +24,59 @@ test("desktop featured demo is fixed, decision-first, and provider-free", async 
   });
 
   await page.goto("/");
-  await expect(page.getByText("Demo data — this URL will not be visited.")).toBeVisible();
-  await expect(page.getByText("regional.example.test", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/sample|demo/i)).toHaveCount(0);
   await expect(
-    page.getByText("United States, United Kingdom, and Germany"),
-  ).toBeVisible();
-  await expect(page.getByRole("textbox")).toHaveCount(0);
-  await expect(page.getByRole("checkbox")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Download JSON" })).toBeDisabled();
+    page.getByRole("button", { name: "Compare live through Solari" }),
+  ).toBeDisabled();
+  await page.getByLabel("Solari API key").fill("synthetic-playwright-key");
+  expect(testDouble.authenticationCalls).toHaveLength(0);
+  expect(testDouble.captureCalls).toHaveLength(0);
 
-  const hierarchy = await page
-    .locator("h2, .evidence-details > summary")
-    .allTextContents();
-  expect(hierarchy.indexOf("What changed")).toBeLessThan(
-    hierarchy.indexOf("Screenshots and regional evidence"),
-  );
+  await page.getByRole("button", { name: "Use my Solari key" }).click();
+  await expect(page.getByText("Ready for this session")).toBeVisible();
+  expect(testDouble.authenticationCalls).toEqual(["authentication"]);
+  expect(testDouble.captureCalls).toHaveLength(0);
+  expect(await page.content()).not.toContain("synthetic-playwright-key");
 
-  await page.getByRole("button", { name: "Run featured demo" }).click();
-  await expect(page.getByText(/^llr_[0-9a-f-]{36}$/)).toBeVisible();
-  await expect(page.locator(".receipt-row").getByText("complete", { exact: true })).toBeVisible();
-
-  const status = page.getByRole("status", { name: "Comparison status" });
-  await expect(status.getByText("Complete", { exact: true })).toHaveCount(3);
-  await expect(page.getByRole("heading", { name: "What changed" })).toBeVisible();
-  await expect(page.getByText("Evidence availability")).toBeVisible();
+  await page.getByLabel("URL (HTTPS)").fill("https://public.synthetic.test/pricing");
+  await page.getByRole("checkbox", { name: "Germany" }).check();
+  await page.getByRole("button", { name: "Compare live through Solari" }).click();
+  await expect(page.locator(".receipt-row").getByText("partial", { exact: true })).toBeVisible();
+  expect(testDouble.captureCalls).toEqual([
+    { attempt: 1, country: "de" },
+    { attempt: 1, country: "gb" },
+    { attempt: 1, country: "us" },
+  ]);
+  await page.waitForTimeout(250);
+  expect(testDouble.captureCalls).toHaveLength(3);
 
   await page.getByText("Screenshots and regional evidence").click();
-  await expect(page.getByRole("article", { name: /regional evidence$/ })).toHaveCount(3);
-  await page.getByText("Detailed field comparison").click();
-  const differences = page.getByRole("table", {
-    name: "Captured field differences by market",
-  });
-  await expect(differences).toBeVisible();
-  await expect(differences.getByRole("rowheader", { name: "Currency" })).toBeVisible();
+  await expect(page.getByText("Live evidence")).toHaveCount(2);
+  await expect(page.getByText("CAPTURE_FAILED", { exact: true })).toBeVisible();
+  await expect(page.getByText("Partial report: 2 of 3 captures succeeded.")).toBeVisible();
 
-  const downloadEvent = page.waitForEvent("download");
+  const partialDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download JSON" }).click();
-  await expect((await downloadEvent).suggestedFilename()).toMatch(/localelens.*\.json$/);
+  await expect((await partialDownload).suggestedFilename()).toMatch(/localelens.*\.json$/);
+
+  await page.getByRole("button", { name: "Retry United Kingdom" }).click();
+  await expect(page.locator(".receipt-row").getByText("complete", { exact: true })).toBeVisible();
+  expect(testDouble.captureCalls).toHaveLength(4);
+  expect(testDouble.captureCalls[3]).toEqual({ attempt: 2, country: "gb" });
+  await expect(page.getByText("Live evidence")).toHaveCount(3);
+
   await page.getByRole("button", { name: "Print evidence" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-print-opened", "true");
-
   expect(
     await page.locator("html").evaluate(
       (element) => element.scrollWidth <= element.clientWidth,
     ),
   ).toBe(true);
-  expect(providerRequests).toEqual([]);
+
+  await page.getByRole("button", { name: "Disconnect" }).click();
+  await expect(page.getByLabel("Solari API key")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Compare live through Solari" }),
+  ).toBeDisabled();
   expect(consoleErrors).toEqual([]);
 });
