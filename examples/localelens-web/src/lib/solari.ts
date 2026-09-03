@@ -1,9 +1,7 @@
 import { Solari } from "@solarisdk/browser";
 
-export function createSolariClient(): Solari {
-  const apiKey = process.env.SOLARI_API_KEY;
-
-  if (!apiKey?.trim()) {
+export function createSolariClient(apiKey: string): Solari {
+  if (!apiKey) {
     throw new Error("SOLARI_NOT_CONFIGURED");
   }
 

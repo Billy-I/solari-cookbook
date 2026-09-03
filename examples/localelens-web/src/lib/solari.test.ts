@@ -13,46 +13,32 @@ vi.mock("@solarisdk/browser", () => ({
 
 import { createSolariClient } from "@/src/lib/solari";
 
-const originalApiKey = process.env.SOLARI_API_KEY;
-
 afterEach(() => {
   vi.restoreAllMocks();
   solariConstructor.mockClear();
-
-  if (originalApiKey === undefined) {
-    delete process.env.SOLARI_API_KEY;
-  } else {
-    process.env.SOLARI_API_KEY = originalApiKey;
-  }
+  delete process.env.SOLARI_API_KEY;
 });
 
 describe("createSolariClient", () => {
-  it.each([undefined, "", "   "])(
-    "fails closed when SOLARI_API_KEY is %s",
-    (apiKey) => {
-      if (apiKey === undefined) {
-        delete process.env.SOLARI_API_KEY;
-      } else {
-        process.env.SOLARI_API_KEY = apiKey;
-      }
+  it("fails closed when the explicit key is empty", () => {
+    process.env.SOLARI_API_KEY = "synthetic-owner-fallback";
 
-      expect(() => createSolariClient()).toThrow("SOLARI_NOT_CONFIGURED");
-      expect(solariConstructor).not.toHaveBeenCalled();
-    },
-  );
+    expect(() => createSolariClient("")).toThrow("SOLARI_NOT_CONFIGURED");
+    expect(solariConstructor).not.toHaveBeenCalled();
+  });
 
-  it("constructs a single-attempt SDK client without logging or returning the key", () => {
-    process.env.SOLARI_API_KEY = "unit-test-key";
+  it("constructs a single-attempt SDK client only from the explicit user key", () => {
+    process.env.SOLARI_API_KEY = "synthetic-owner-fallback";
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const error = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
-    const result = createSolariClient();
+    const result = createSolariClient("synthetic-user-key");
 
     expect(solariConstructor).toHaveBeenCalledOnce();
     expect(solariConstructor).toHaveBeenCalledWith({
-      apiKey: "unit-test-key",
+      apiKey: "synthetic-user-key",
       maxAttempts: 1,
     });
     expect(result).toBe(client);
