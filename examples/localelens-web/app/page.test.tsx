@@ -75,6 +75,12 @@ describe("LocaleLens comparison page", () => {
 
     expect(screen.getByText("Live through Solari.")).toBeVisible();
     expect(screen.getAllByRole("checkbox")).toHaveLength(15);
+    expect(
+      screen.getByText("Run a live comparison to create an exportable receipt."),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("Run the featured demo to create an exportable receipt."),
+    ).not.toBeInTheDocument();
 
     expect(
       within(screen.getByRole("region", { name: "Run evidence" })).getByText(

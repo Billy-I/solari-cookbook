@@ -115,7 +115,7 @@ export default function Page() {
             <h2 id="evidence-actions-heading">Keep the evidence reviewable</h2>
           </div>
           <ExportActions
-            mode={evidenceMode}
+            mode={run.mode}
             regions={evidenceRegions}
             runId={run.runId}
             status={evidenceStatus}
