@@ -3,8 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuditFormValue } from "@/src/components/audit-form";
 import type { CaptureResponse } from "@/src/features/capture/contracts";
 import {
-  runComparison,
-  runCountryCapture,
+  runComparison as runComparisonWithContext,
+  runCountryCapture as runCountryCaptureWithContext,
+  type CaptureTransportPool,
+  type RunEvents,
+  validateSelectedCountries,
 } from "@/src/features/run/run-comparison";
 import { sampleCaptureByCountry } from "@/src/test/fixtures";
 
@@ -12,16 +15,82 @@ const input: AuditFormValue = {
   url: " https://regional.example.test/pricing ",
   countries: ["us", "gb", "de"],
 };
+const runContext = {
+  runId: "llr_123e4567-e89b-42d3-a456-426614174000",
+  attempt: 1,
+} as const;
+
+function withRunContext(body: unknown): unknown {
+  if (typeof body !== "object" || body === null || !("ok" in body)) return body;
+  if (body.ok === false) {
+    return Object.hasOwn(body, "correlation")
+      ? body
+      : { ...body, correlation: null };
+  }
+  if (
+    body.ok === true &&
+    "receipt" in body &&
+    typeof body.receipt === "object" &&
+    body.receipt !== null
+  ) {
+    return {
+      ...body,
+      receipt: {
+        ...body.receipt,
+        ...runContext,
+        sessionRef: "sol_0123456789abcdefabcd",
+      },
+    };
+  }
+  return body;
+}
 
 function response(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+  return new Response(JSON.stringify(withRunContext(body)), {
     headers: { "Content-Type": "application/json" },
     status,
   });
 }
 
+function liveCapture(body: CaptureResponse): CaptureResponse {
+  return withRunContext(body) as CaptureResponse;
+}
+
+function runComparison(
+  value: AuditFormValue,
+  runEvents: RunEvents,
+  signal: AbortSignal,
+  transportPool?: CaptureTransportPool,
+) {
+  return runComparisonWithContext(
+    value,
+    runContext,
+    runEvents,
+    signal,
+    transportPool,
+  );
+}
+
+function runCountryCapture(
+  country: AuditFormValue["countries"][number],
+  url: string,
+  runEvents: RunEvents,
+  signal: AbortSignal,
+  transportPool?: CaptureTransportPool,
+) {
+  return runCountryCaptureWithContext(
+    country,
+    url,
+    runContext,
+    runEvents,
+    signal,
+    transportPool,
+  );
+}
+
 function events() {
   return {
+    batchStarted: vi.fn(),
     failed: vi.fn(),
     started: vi.fn(),
     succeeded: vi.fn(),
@@ -34,6 +103,115 @@ afterEach(() => {
 });
 
 describe("runComparison", () => {
+  it("runs selected markets in deterministic batches of at most three transports", async () => {
+    const selected = ["us", "gb", "de", "fr", "jp", "au"] as const;
+    const pending: Array<{
+      country: (typeof selected)[number];
+      resolve: () => void;
+    }> = [];
+    let active = 0;
+    let maximumActive = 0;
+    const fetch = vi.fn((_url: string, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as {
+        country: (typeof selected)[number];
+        runId: string;
+        attempt: number;
+      };
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+
+      return new Promise<Response>((resolve) => {
+        pending.push({
+          country: request.country,
+          resolve: () => {
+            active -= 1;
+            const fixture = sampleCaptureByCountry.us;
+            resolve(
+              response({
+                ...fixture,
+                receipt: {
+                  ...fixture.receipt,
+                  country: request.country,
+                  proxyCountry: request.country,
+                  runId: request.runId,
+                  attempt: request.attempt,
+                },
+              }),
+            );
+          },
+        });
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const runEvents = events();
+
+    const run = runComparisonWithContext(
+      {
+        url: "https://regional.example.test/pricing",
+        countries: [...selected],
+      },
+      runContext,
+      runEvents,
+      new AbortController().signal,
+    );
+
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    expect(pending.map(({ country }) => country)).toEqual(["us", "gb", "de"]);
+    expect(runEvents.batchStarted).toHaveBeenNthCalledWith(1, 1, 2);
+
+    for (const request of pending.slice(0, 3)) request.resolve();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(6));
+    expect(pending.map(({ country }) => country)).toEqual([...selected]);
+    expect(runEvents.batchStarted).toHaveBeenNthCalledWith(2, 2, 2);
+
+    for (const request of pending.slice(3)) request.resolve();
+    await run;
+
+    expect(maximumActive).toBe(3);
+    expect(fetch.mock.calls.map(([, init]) => JSON.parse(String(init?.body))))
+      .toEqual(selected.map((country) => ({ country, ...runContext, url: input.url.trim() })));
+  });
+
+  it("accepts four markets and rejects selections beyond the verified catalogue", () => {
+    expect(
+      validateSelectedCountries({ ...input, countries: ["us", "gb", "de", "fr"] }),
+    ).toEqual(["us", "gb", "de", "fr"]);
+    expect(() =>
+      validateSelectedCountries({
+        ...input,
+        countries: [
+          "au", "br", "ca", "de", "es", "fr", "gb", "in",
+          "it", "jp", "kr", "mx", "nl", "sg", "us", "us",
+        ],
+      }),
+    ).toThrow("Select 2 to 15 unique supported countries.");
+  });
+
+  it("does not start a later batch after cancellation", async () => {
+    const fetch = vi.fn(() => new Promise<Response>(() => undefined));
+    vi.stubGlobal("fetch", fetch);
+    const controller = new AbortController();
+    const abort = new DOMException("cancelled", "AbortError");
+    const runEvents = events();
+
+    const run = runComparisonWithContext(
+      {
+        url: "https://regional.example.test/pricing",
+        countries: ["us", "gb", "de", "fr"],
+      },
+      runContext,
+      runEvents,
+      controller.signal,
+    );
+
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    controller.abort(abort);
+
+    await expect(run).rejects.toBe(abort);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(runEvents.batchStarted).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ["a top-level success apiKey", { ...sampleCaptureByCountry.us, apiKey: "not-allowed" }],
     [
@@ -179,13 +357,14 @@ describe("runComparison", () => {
         body: JSON.stringify({
           country: "gb",
           url: "https://regional.example.test/pricing",
+          ...runContext,
         }),
       }),
     );
     expect(runEvents.started).toHaveBeenCalledWith("gb");
     expect(runEvents.succeeded).toHaveBeenCalledWith(
       "gb",
-      sampleCaptureByCountry.gb,
+      liveCapture(sampleCaptureByCountry.gb),
     );
   });
 
@@ -211,7 +390,11 @@ describe("runComparison", () => {
       1,
       "/api/captures",
       expect.objectContaining({
-        body: JSON.stringify({ country: "us", url: "https://regional.example.test/pricing" }),
+        body: JSON.stringify({
+          country: "us",
+          url: "https://regional.example.test/pricing",
+          ...runContext,
+        }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       }),
@@ -235,6 +418,7 @@ describe("runComparison", () => {
   it("preserves successful countries while emitting safe failed events for malformed and failed responses", async () => {
     const apiFailure: CaptureResponse = {
       ok: false,
+      correlation: null,
       error: {
         code: "NAVIGATION_TIMEOUT",
         message: "The target did not load within the capture limit.",
@@ -251,7 +435,10 @@ describe("runComparison", () => {
 
     await runComparison(input, runEvents, new AbortController().signal);
 
-    expect(runEvents.succeeded).toHaveBeenCalledWith("us", sampleCaptureByCountry.us);
+    expect(runEvents.succeeded).toHaveBeenCalledWith(
+      "us",
+      liveCapture(sampleCaptureByCountry.us),
+    );
     expect(runEvents.failed).toHaveBeenCalledTimes(2);
     expect(runEvents.failed.mock.calls).toEqual([
       [
@@ -275,7 +462,7 @@ describe("runComparison", () => {
     controller.abort(abort);
 
     await expect(runComparison(input, runEvents, controller.signal)).rejects.toBe(abort);
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).not.toHaveBeenCalled();
     expect(runEvents.failed).not.toHaveBeenCalled();
     expect(runEvents.succeeded).not.toHaveBeenCalled();
   });
@@ -322,13 +509,22 @@ describe("runComparison", () => {
     expect(runEvents.failed.mock.calls).toEqual([
       ["us", expect.objectContaining({ code: "NAVIGATION_TIMEOUT" })],
     ]);
-    expect(runEvents.succeeded).toHaveBeenCalledWith("gb", sampleCaptureByCountry.gb);
+    expect(runEvents.succeeded).toHaveBeenCalledWith(
+      "gb",
+      liveCapture(sampleCaptureByCountry.gb),
+    );
   });
 
   it.each([
     ["duplicate countries", ["us", "us"]],
     ["fewer than two countries", ["us"]],
-    ["more than three countries", ["us", "gb", "de", "fr"]],
+    [
+      "more than fifteen countries",
+      [
+        "au", "br", "ca", "de", "es", "fr", "gb", "in",
+        "it", "jp", "kr", "mx", "nl", "sg", "us", "us",
+      ],
+    ],
     ["unsupported country", ["us", "zz"]],
   ])("rejects %s before starting any request", async (_case, countries) => {
     const fetch = vi.fn();
@@ -341,7 +537,7 @@ describe("runComparison", () => {
         runEvents,
         new AbortController().signal,
       ),
-    ).rejects.toThrow("Select exactly 2 or 3 unique supported countries.");
+    ).rejects.toThrow("Select 2 to 15 unique supported countries.");
 
     expect(fetch).not.toHaveBeenCalled();
     expect(runEvents.started).not.toHaveBeenCalled();
@@ -354,7 +550,12 @@ describe("runComparison", () => {
     const succeeded = vi.fn((country: string) => {
       if (country === "us") throw callbackError;
     });
-    const runEvents = { failed: vi.fn(), started: vi.fn(), succeeded };
+    const runEvents = {
+      batchStarted: vi.fn(),
+      failed: vi.fn(),
+      started: vi.fn(),
+      succeeded,
+    };
     vi.stubGlobal(
       "fetch",
       vi

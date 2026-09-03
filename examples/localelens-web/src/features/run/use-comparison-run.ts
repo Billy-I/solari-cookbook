@@ -4,17 +4,21 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 
 import type { AuditFormValue } from "@/src/components/audit-form";
 import type {
+  AppRunId,
   CaptureFailure,
   CaptureResponse,
   CaptureStage,
   SupportedCountry,
 } from "@/src/features/capture/contracts";
+import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
+import { createAppRunId } from "@/src/features/capture/run-id";
 import {
   createCaptureTransportPool,
   runComparison,
   runCountryCapture,
   type RunEvents,
   validateSelectedCountries,
+  type RunContext,
 } from "@/src/features/run/run-comparison";
 import { sampleCaptureByCountry } from "@/src/test/fixtures";
 
@@ -31,13 +35,30 @@ export type ComparisonRun = {
   mode: "sample" | "live";
   status: "idle" | "running" | "partial" | "complete" | "cancelled";
   regions: RegionRunState[];
+  runId: AppRunId | null;
+  progress: RunProgress;
   value: AuditFormValue | null;
   start(value: AuditFormValue): Promise<void>;
   retry(country: SupportedCountry): Promise<void>;
   cancel(): void;
 };
 
-type RunState = Pick<ComparisonRun, "regions" | "status" | "value"> & {
+export type RunProgress = {
+  selected: number;
+  queued: number;
+  running: number;
+  completed: number;
+  failed: number;
+  batch: number;
+  totalBatches: number;
+};
+
+type RunState = Pick<
+  ComparisonRun,
+  "regions" | "runId" | "status" | "value"
+> & {
+  batch: number;
+  totalBatches: number;
   generation: number;
   operationIds: Partial<Record<SupportedCountry, number>>;
 };
@@ -47,7 +68,15 @@ type RunAction =
       type: "begin";
       generation: number;
       operationId: number;
+      runId: AppRunId;
       value: AuditFormValue;
+    }
+  | {
+      type: "batch";
+      batch: number;
+      generation: number;
+      operationId: number;
+      totalBatches: number;
     }
   | {
       type: "advance";
@@ -71,6 +100,7 @@ type ComparisonRunOptions = {
   comparisonRunner?: ComparisonRunner;
   countryRunner?: CountryRunner;
   fixtureLookup?: FixtureLookup;
+  createRunId?: () => AppRunId;
   mode?: ComparisonRun["mode"];
 };
 
@@ -85,6 +115,7 @@ const inProgressStages: CaptureStage[] = [
 
 const unavailableFixture: CaptureFailure = {
   ok: false,
+  correlation: null,
   error: {
     code: "CAPTURE_FAILED",
     message: "Sample evidence is unavailable for this market.",
@@ -93,10 +124,13 @@ const unavailableFixture: CaptureFailure = {
 };
 
 const initialState: RunState = {
+  batch: 0,
   generation: 0,
   operationIds: {},
   regions: [],
+  runId: null,
   status: "idle",
+  totalBatches: 0,
   value: null,
 };
 
@@ -129,6 +163,7 @@ function reducer(state: RunState, action: RunAction): RunState {
     const countries = [...action.value.countries];
     return {
       generation: action.generation,
+      batch: 0,
       operationIds: Object.fromEntries(
         countries.map((country) => [country, action.operationId]),
       ),
@@ -138,7 +173,26 @@ function reducer(state: RunState, action: RunAction): RunState {
         stage: "queued",
       })),
       status: "running",
+      runId: action.runId,
+      totalBatches: Math.ceil(
+        countries.length / CAPTURE_LIMITS.maxConcurrentCaptures,
+      ),
       value: { ...action.value, countries },
+    };
+  }
+
+  if (action.type === "batch") {
+    if (
+      state.generation !== action.generation ||
+      !Object.values(state.operationIds).includes(action.operationId)
+    ) {
+      return state;
+    }
+
+    return {
+      ...state,
+      batch: action.batch,
+      totalBatches: action.totalBatches,
     };
   }
 
@@ -148,6 +202,11 @@ function reducer(state: RunState, action: RunAction): RunState {
       generation: action.generation,
       operationIds: Object.fromEntries(
         state.regions.map(({ country }) => [country, action.operationId]),
+      ),
+      regions: state.regions.map((region) =>
+        region.stage === "complete" || region.stage === "failed"
+          ? region
+          : { ...region, stage: "cancelled" as const },
       ),
       status: "cancelled",
     };
@@ -251,6 +310,7 @@ export function useComparisonRun(
   const {
     comparisonRunner = runComparison,
     countryRunner = runCountryCapture,
+    createRunId = createAppRunId,
     fixtureLookup = defaultFixtureLookup,
     mode = configuredMode(),
   } = options;
@@ -264,6 +324,7 @@ export function useComparisonRun(
   const retryReservationsRef = useRef(
     new Map<SupportedCountry, number>(),
   );
+  const attemptsRef = useRef(new Map<SupportedCountry, number>());
   const transportPoolRef = useRef(createCaptureTransportPool());
 
   const abortActive = useCallback(() => {
@@ -298,18 +359,28 @@ export function useComparisonRun(
       generationRef.current += 1;
       currentOperationIdsRef.current.clear();
       retryReservationsRef.current.clear();
+      attemptsRef.current.clear();
     },
     [abortActive],
   );
 
   const eventsFor = useCallback(
-    (operationId: number): RunEvents => ({
+    (operationId: number, generation: number): RunEvents => ({
+      batchStarted(batch, totalBatches) {
+        dispatch({
+          batch,
+          generation,
+          operationId,
+          totalBatches,
+          type: "batch",
+        });
+      },
       failed(country, error) {
         if (currentOperationIdsRef.current.get(country) !== operationId) return;
         dispatch({
           country,
           operationId,
-          response: { error, ok: false },
+          response: { correlation: null, error, ok: false },
           stage: "failed",
           type: "advance",
         });
@@ -343,6 +414,7 @@ export function useComparisonRun(
       staggerMs: number,
       operationId: number,
       signal: AbortSignal,
+      context: RunContext,
     ) => {
       await wait(staggerMs, signal);
       for (const stage of inProgressStages) {
@@ -350,7 +422,18 @@ export function useComparisonRun(
         await wait(stepDelayMs, signal);
       }
 
-      const response = fixtureLookup(country);
+      const fixture = fixtureLookup(country);
+      const response: CaptureResponse = fixture.ok
+        ? {
+            ...fixture,
+            receipt: {
+              ...fixture.receipt,
+              runId: context.runId,
+              attempt: context.attempt,
+              sessionRef: null,
+            },
+          }
+        : { ...fixture, correlation: null };
       dispatch({
         country,
         operationId,
@@ -366,8 +449,10 @@ export function useComparisonRun(
     async (value: AuditFormValue) => {
       const countries = validateSelectedCountries(value);
       const validatedValue = { ...value, countries };
+      const runId = createRunId();
       const previousSignals = abortActive();
       retryReservationsRef.current.clear();
+      attemptsRef.current = new Map(countries.map((country) => [country, 1]));
       const generation = ++generationRef.current;
       const operationId = ++operationIdRef.current;
       const controller = new AbortController();
@@ -378,6 +463,7 @@ export function useComparisonRun(
       dispatch({
         generation,
         operationId,
+        runId,
         type: "begin",
         value: validatedValue,
       });
@@ -391,6 +477,7 @@ export function useComparisonRun(
                 index * countryStaggerMs,
                 operationId,
                 controller.signal,
+                { runId, attempt: 1 },
               ),
             ),
           );
@@ -411,7 +498,8 @@ export function useComparisonRun(
           }
           await comparisonRunner(
             validatedValue,
-            eventsFor(operationId),
+            { runId, attempt: 1 },
+            eventsFor(operationId, generation),
             controller.signal,
             transportPoolRef.current,
           );
@@ -425,6 +513,7 @@ export function useComparisonRun(
     [
       abortActive,
       comparisonRunner,
+      createRunId,
       eventsFor,
       mode,
       releaseController,
@@ -438,6 +527,7 @@ export function useComparisonRun(
       const expectedOperationId = state.operationIds[country];
       if (
         !state.value ||
+        !state.runId ||
         expectedOperationId === undefined ||
         generationRef.current !== state.generation ||
         currentOperationIdsRef.current.get(country) !== expectedOperationId ||
@@ -452,7 +542,9 @@ export function useComparisonRun(
       }
 
       const operationId = ++operationIdRef.current;
+      const attempt = (attemptsRef.current.get(country) ?? 1) + 1;
       retryReservationsRef.current.set(country, operationId);
+      attemptsRef.current.set(country, attempt);
       currentOperationIdsRef.current.set(country, operationId);
       const controller = new AbortController();
       controllersRef.current.set(operationId, controller);
@@ -466,12 +558,19 @@ export function useComparisonRun(
 
       try {
         if (mode === "sample") {
-          await runSampleCountry(country, 0, operationId, controller.signal);
+          await runSampleCountry(
+            country,
+            0,
+            operationId,
+            controller.signal,
+            { runId: state.runId, attempt },
+          );
         } else {
           await countryRunner(
             country,
             state.value.url,
-            eventsFor(operationId),
+            { runId: state.runId, attempt },
+            eventsFor(operationId, state.generation),
             controller.signal,
             transportPoolRef.current,
           );
@@ -494,6 +593,7 @@ export function useComparisonRun(
       state.generation,
       state.operationIds,
       state.regions,
+      state.runId,
       state.value,
     ],
   );
@@ -512,7 +612,19 @@ export function useComparisonRun(
   return {
     cancel,
     mode,
+    progress: {
+      selected: state.regions.length,
+      queued: state.regions.filter(({ stage }) => stage === "queued").length,
+      running: state.regions.filter(({ stage }) =>
+        inProgressStages.includes(stage),
+      ).length,
+      completed: state.regions.filter(({ stage }) => stage === "complete").length,
+      failed: state.regions.filter(({ stage }) => stage === "failed").length,
+      batch: state.batch,
+      totalBatches: state.totalBatches,
+    },
     regions: state.regions,
+    runId: state.runId,
     retry,
     start,
     status: state.status,

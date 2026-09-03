@@ -25,6 +25,7 @@ const value: AuditFormValue = {
 
 const retryableFailure: CaptureFailure = {
   ok: false,
+  correlation: null,
   error: {
     code: "NAVIGATION_TIMEOUT",
     message: "The target did not load within the capture limit.",
@@ -33,6 +34,7 @@ const retryableFailure: CaptureFailure = {
 };
 
 type ComparisonCall = {
+  context: Parameters<ComparisonRunner>[1];
   events: RunEvents;
   input: AuditFormValue;
   reject: (reason?: unknown) => void;
@@ -41,6 +43,7 @@ type ComparisonCall = {
 };
 
 type CountryCall = {
+  context: Parameters<CountryRunner>[2];
   country: SupportedCountry;
   events: RunEvents;
   reject: (reason?: unknown) => void;
@@ -51,9 +54,9 @@ type CountryCall = {
 
 function deferredComparisonRunner() {
   const calls: ComparisonCall[] = [];
-  const runner: ComparisonRunner = vi.fn((input, events, signal) =>
+  const runner: ComparisonRunner = vi.fn((input, context, events, signal) =>
     new Promise<void>((resolve, reject) => {
-      calls.push({ events, input, reject, resolve, signal });
+      calls.push({ context, events, input, reject, resolve, signal });
     }),
   );
 
@@ -62,9 +65,10 @@ function deferredComparisonRunner() {
 
 function deferredCountryRunner() {
   const calls: CountryCall[] = [];
-  const runner: CountryRunner = vi.fn((country, url, events, signal) =>
+  const runner: CountryRunner = vi.fn(
+    (country, url, context, events, signal) =>
     new Promise<void>((resolve, reject) => {
-      calls.push({ country, events, reject, resolve, signal, url });
+      calls.push({ context, country, events, reject, resolve, signal, url });
     }),
   );
 
@@ -101,6 +105,46 @@ afterEach(() => {
 });
 
 describe("useComparisonRun", () => {
+  it("creates a safe run ID, exposes progress, and marks unfinished regions cancelled", async () => {
+    const comparison = deferredComparisonRunner();
+    const createRunId = vi.fn(
+      () => "llr_123e4567-e89b-42d3-a456-426614174000" as const,
+    );
+    const { result } = renderHook(() =>
+      useComparisonRun({
+        comparisonRunner: comparison.runner,
+        createRunId,
+        mode: "live",
+      }),
+    );
+
+    let run!: Promise<void>;
+    act(() => {
+      run = result.current.start(value);
+    });
+
+    expect(result.current.runId).toBe(
+      "llr_123e4567-e89b-42d3-a456-426614174000",
+    );
+    expect(result.current.progress).toEqual({
+      selected: 3,
+      queued: 3,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      batch: 0,
+      totalBatches: 1,
+    });
+
+    act(() => result.current.cancel());
+
+    expect(result.current.status).toBe("cancelled");
+    expect(result.current.regions.every(({ stage }) => stage === "cancelled"))
+      .toBe(true);
+    expect(comparison.calls[0]!.signal.aborted).toBe(true);
+    await settle(run, comparison.calls[0]!.resolve);
+  });
+
   it("starts idle and reports the configured provenance mode", () => {
     const { result } = renderHook(() => useComparisonRun({ mode: "live" }));
 
@@ -210,6 +254,10 @@ describe("useComparisonRun", () => {
     expect(country.calls).toHaveLength(1);
     expect(country.calls[0]).toMatchObject({
       country: "gb",
+      context: {
+        runId: comparison.calls[0]!.context.runId,
+        attempt: 2,
+      },
       url: "https://regional.example.test/pricing",
     });
     expect(result.current.regions.find(({ country: code }) => code === "gb")).toMatchObject(
@@ -453,6 +501,7 @@ describe("useComparisonRun", () => {
     const { result } = renderHook(() =>
       useComparisonRun({
         comparisonRunner: comparison.runner,
+        createRunId: () => "llr_00000000-0000-4000-8000-000000000000",
         countryRunner: country.runner,
         mode: "sample",
       }),
@@ -570,8 +619,18 @@ describe("useComparisonRun", () => {
         JSON.parse(String(init?.body)),
       ),
     ).toEqual([
-      { country: "fr", url: "https://second.example.test/" },
-      { country: "jp", url: "https://second.example.test/" },
+      {
+        country: "fr",
+        runId: expect.stringMatching(/^llr_/),
+        attempt: 1,
+        url: "https://second.example.test/",
+      },
+      {
+        country: "jp",
+        runId: expect.stringMatching(/^llr_/),
+        attempt: 1,
+        url: "https://second.example.test/",
+      },
     ]);
 
     act(() => result.current.cancel());
@@ -626,7 +685,13 @@ describe("useComparisonRun", () => {
   it.each([
     ["duplicate", ["us", "us"]],
     ["fewer than two", ["us"]],
-    ["more than three", ["us", "gb", "de", "fr"]],
+    [
+      "more than fifteen",
+      [
+        "au", "br", "ca", "de", "es", "fr", "gb", "in",
+        "it", "jp", "kr", "mx", "nl", "sg", "us", "us",
+      ],
+    ],
     ["unsupported", ["us", "zz"]],
   ])("rejects %s countries before sample or live work starts", async (_case, countries) => {
     for (const mode of ["sample", "live"] as const) {
@@ -651,7 +716,7 @@ describe("useComparisonRun", () => {
       });
 
       expect(rejection).toEqual(
-        new Error("Select exactly 2 or 3 unique supported countries."),
+        new Error("Select 2 to 15 unique supported countries."),
       );
       expect(result.current.status).toBe("idle");
       expect(result.current.regions).toEqual([]);
@@ -685,7 +750,7 @@ describe("useComparisonRun", () => {
     await act(async () => Promise.resolve());
 
     expect(rejection).toEqual(
-      new Error("Select exactly 2 or 3 unique supported countries."),
+      new Error("Select 2 to 15 unique supported countries."),
     );
     expect(comparison.calls).toHaveLength(1);
     expect(comparison.calls[0]!.signal.aborted).toBe(false);

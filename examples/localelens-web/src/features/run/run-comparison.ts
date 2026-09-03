@@ -1,5 +1,7 @@
 import type { AuditFormValue } from "@/src/components/audit-form";
 import {
+  type AppRunId,
+  type CaptureCorrelation,
   type CaptureFailure,
   type CaptureResponse,
 } from "@/src/features/capture/contracts";
@@ -12,7 +14,6 @@ import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
 import { toSafeCaptureFailure } from "@/src/features/capture/safe-error";
 
 const clientTimeoutMs = 45_000;
-const maximumUnresolvedTransports = 3;
 const isoDateSource =
   "(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))";
 const isoOffsetDateTime = new RegExp(
@@ -24,6 +25,7 @@ class ResponseTooLargeError extends Error {}
 export type PublicCaptureError = CaptureFailure["error"];
 
 export type RunEvents = {
+  batchStarted(batch: number, totalBatches: number): void;
   started(country: SupportedCountry): void;
   succeeded(country: SupportedCountry, response: CaptureResponse): void;
   failed(country: SupportedCountry, error: PublicCaptureError): void;
@@ -67,7 +69,7 @@ export function createCaptureTransportPool(): CaptureTransportPool {
       return [...active].some((transport) => transport.signal === signal);
     },
     run<T>(country: SupportedCountry, signal: AbortSignal, start: () => Promise<T>) {
-      if (active.size >= maximumUnresolvedTransports) {
+      if (active.size >= CAPTURE_LIMITS.maxConcurrentCaptures) {
         return Promise.reject(new Error("SOLARI_CAPACITY"));
       }
 
@@ -214,6 +216,39 @@ function isSupportedCountry(value: unknown): value is SupportedCountry {
   );
 }
 
+function isAppRunId(value: unknown): value is AppRunId {
+  return (
+    typeof value === "string" &&
+    /^llr_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      value,
+    )
+  );
+}
+
+function isAttempt(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= 99
+  );
+}
+
+function isSessionRef(value: unknown): value is string {
+  return typeof value === "string" && /^sol_[0-9a-f]{20}$/.test(value);
+}
+
+function isCaptureCorrelation(value: unknown): value is CaptureCorrelation {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, ["runId", "country", "attempt", "sessionRef"]) &&
+    isAppRunId(value.runId) &&
+    isSupportedCountry(value.country) &&
+    isAttempt(value.attempt) &&
+    isSessionRef(value.sessionRef)
+  );
+}
+
 function isIsoOffsetDateTime(value: unknown): value is string {
   return typeof value === "string" && isoOffsetDateTime.test(value);
 }
@@ -223,7 +258,8 @@ function isCaptureResponse(body: unknown): body is CaptureResponse {
 
   if (!body.ok) {
     return (
-      hasExactKeys(body, ["ok", "error"]) &&
+      hasExactKeys(body, ["ok", "correlation", "error"]) &&
+      (body.correlation === null || isCaptureCorrelation(body.correlation)) &&
       isRecord(body.error) &&
       hasExactKeys(body.error, ["code", "message", "retryable"]) &&
       typeof body.error.code === "string" &&
@@ -263,11 +299,13 @@ function isCaptureResponse(body: unknown): body is CaptureResponse {
       "capturedAt",
     ]) &&
     hasExactKeys(receipt, [
+      "runId",
       "country",
+      "attempt",
+      "sessionRef",
       "proxyCountry",
       "proxyTier",
       "timezoneId",
-      "sessionId",
       "recordingRequested",
     ]) &&
     hasExactKeys(screenshot, ["mediaType", "base64", "width"]) &&
@@ -287,11 +325,13 @@ function isCaptureResponse(body: unknown): body is CaptureResponse {
         httpStatus >= 100 &&
         httpStatus <= 599)) &&
     isIsoOffsetDateTime(evidence.capturedAt) &&
+    isAppRunId(receipt.runId) &&
     isSupportedCountry(receipt.country) &&
+    isAttempt(receipt.attempt) &&
+    (receipt.sessionRef === null || isSessionRef(receipt.sessionRef)) &&
     isSupportedCountry(receipt.proxyCountry) &&
     receipt.proxyTier === "residential" &&
     isNullableString(receipt.timezoneId, 100) &&
-    isNonEmptyString(receipt.sessionId, 500) &&
     receipt.recordingRequested === true &&
     screenshot.mediaType === "image/jpeg" &&
     isNonEmptyString(screenshot.base64, 2_000_000) &&
@@ -305,6 +345,7 @@ function isCaptureResponse(body: unknown): body is CaptureResponse {
 async function runCountryRequest(
   country: SupportedCountry,
   url: string,
+  context: RunContext,
   events: RunEvents,
   signal: AbortSignal,
   transportPool: CaptureTransportPool,
@@ -319,7 +360,7 @@ async function runCountryRequest(
     const { response, body } = await settleRequest(
       transportPool.run(country, signal, async () => {
         const response = await fetch("/api/captures", {
-          body: JSON.stringify({ country, url }),
+          body: JSON.stringify({ country, url, ...context }),
           headers: { "Content-Type": "application/json" },
           method: "POST",
           signal,
@@ -336,7 +377,9 @@ async function runCountryRequest(
       response.ok &&
       parsed.ok &&
       parsed.receipt.country === country &&
-      parsed.receipt.proxyCountry === country
+      parsed.receipt.proxyCountry === country &&
+      parsed.receipt.runId === context.runId &&
+      parsed.receipt.attempt === context.attempt
     ) {
       outcome = { type: "succeeded", response: parsed };
     } else if (
@@ -378,6 +421,7 @@ async function runCountryRequest(
 export async function runCountryCapture(
   country: SupportedCountry,
   url: string,
+  context: RunContext,
   events: RunEvents,
   signal: AbortSignal,
   transportPool = createCaptureTransportPool(),
@@ -385,6 +429,7 @@ export async function runCountryCapture(
   await runCountryRequest(
     country,
     new URL(url.trim()).toString(),
+    context,
     events,
     signal,
     transportPool,
@@ -399,13 +444,13 @@ export function validateSelectedCountries(
 
   if (
     countries.length < 2 ||
-    countries.length > CAPTURE_LIMITS.maxCountries ||
+    countries.length > CAPTURE_LIMITS.maxSelectedCountries ||
     uniqueCountries.size !== countries.length ||
     countries.some(
       (country) => !SUPPORTED_COUNTRIES.includes(country as SupportedCountry),
     )
   ) {
-    throw new Error("Select exactly 2 or 3 unique supported countries.");
+    throw new Error("Select 2 to 15 unique supported countries.");
   }
 
   return countries as SupportedCountry[];
@@ -413,6 +458,7 @@ export function validateSelectedCountries(
 
 export async function runComparison(
   input: AuditFormValue,
+  context: RunContext,
   events: RunEvents,
   signal: AbortSignal,
   transportPool = createCaptureTransportPool(),
@@ -420,17 +466,36 @@ export async function runComparison(
   const countries = validateSelectedCountries(input);
   const url = new URL(input.url.trim()).toString();
 
-  const settlements = await Promise.allSettled(
-    countries.map((country) =>
-      runCountryRequest(country, url, events, signal, transportPool),
-    ),
-  );
+  const batchSize = CAPTURE_LIMITS.maxConcurrentCaptures;
+  const totalBatches = Math.ceil(countries.length / batchSize);
 
-  if (signal.aborted) throw abortReason(signal);
+  for (let offset = 0; offset < countries.length; offset += batchSize) {
+    if (signal.aborted) throw abortReason(signal);
+    const batch = countries.slice(offset, offset + batchSize);
+    events.batchStarted(offset / batchSize + 1, totalBatches);
+    const settlements = await Promise.allSettled(
+      batch.map((country) =>
+        runCountryRequest(
+          country,
+          url,
+          context,
+          events,
+          signal,
+          transportPool,
+        ),
+      ),
+    );
 
-  const callbackFailure = settlements.find(
-    (settlement): settlement is PromiseRejectedResult =>
-      settlement.status === "rejected",
-  );
-  if (callbackFailure) throw callbackFailure.reason;
+    if (signal.aborted) throw abortReason(signal);
+    const callbackFailure = settlements.find(
+      (settlement): settlement is PromiseRejectedResult =>
+        settlement.status === "rejected",
+    );
+    if (callbackFailure) throw callbackFailure.reason;
+  }
 }
+
+export type RunContext = {
+  runId: AppRunId;
+  attempt: number;
+};

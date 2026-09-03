@@ -30,6 +30,10 @@ describe("capture resource boundaries", () => {
 
       const run = runComparison(
         { url: "https://example.com/", countries: ["us", "gb"] },
+        {
+          runId: "llr_123e4567-e89b-42d3-a456-426614174000",
+          attempt: 1,
+        },
         events,
         new AbortController().signal,
       );

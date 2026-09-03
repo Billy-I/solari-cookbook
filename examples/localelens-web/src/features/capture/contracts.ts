@@ -125,6 +125,7 @@ export const CAPTURE_STAGES = [
   "closing",
   "complete",
   "failed",
+  "cancelled",
 ] as const;
 
 const reportResultSchema = z
