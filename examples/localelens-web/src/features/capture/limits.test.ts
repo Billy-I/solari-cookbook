@@ -1,34 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AuditFormValue } from "@/src/components/audit-form";
-import {
-  runComparison,
-  validateSelectedCountries,
-} from "@/src/features/run/run-comparison";
+import { CAPTURE_LIMITS } from "@/src/features/capture/limits";
+import { runComparison } from "@/src/features/run/run-comparison";
 
 describe("capture resource boundaries", () => {
-  it.each([
-    ["two countries", ["us", "gb"]],
-    ["three countries", ["us", "gb", "de"]],
-  ] as const)("accepts %s", (_case, countries) => {
-    expect(
-      validateSelectedCountries({
-        url: "https://example.com/",
-        countries: [...countries],
-      }),
-    ).toEqual(countries);
-  });
-
-  it.each([
-    ["one country", ["us"]],
-    ["four countries", ["us", "gb", "de", "fr"]],
-  ] as const)("rejects %s", (_case, countries) => {
-    expect(() =>
-      validateSelectedCountries({
-        url: "https://example.com/",
-        countries: [...countries] as AuditFormValue["countries"],
-      }),
-    ).toThrow("Select exactly 2 or 3 unique supported countries.");
+  it("separates total market selection from provider concurrency", () => {
+    expect(CAPTURE_LIMITS.maxSelectedCountries).toBe(15);
+    expect(CAPTURE_LIMITS.maxConcurrentCaptures).toBe(3);
   });
 
   it("rejects a response one byte above 3 MB before the navigation timeout", async () => {
@@ -43,7 +21,12 @@ describe("capture resource boundaries", () => {
         new Response(stream, { headers: { "Content-Type": "application/json" } }),
       );
       vi.stubGlobal("fetch", fetch);
-      const events = { failed: vi.fn(), started: vi.fn(), succeeded: vi.fn() };
+      const events = {
+        batchStarted: vi.fn(),
+        failed: vi.fn(),
+        started: vi.fn(),
+        succeeded: vi.fn(),
+      };
 
       const run = runComparison(
         { url: "https://example.com/", countries: ["us", "gb"] },

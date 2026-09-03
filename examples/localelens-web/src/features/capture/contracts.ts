@@ -3,12 +3,14 @@ import { z } from "zod";
 import { SUPPORTED_COUNTRIES, type SupportedCountry } from "./countries";
 import { SAFE_CAPTURE_ERROR_CODES } from "./error-codes";
 import { CAPTURE_LIMITS } from "./limits";
+import { appRunIdSchema } from "./run-id";
 
 export { SUPPORTED_COUNTRIES, type SupportedCountry } from "./countries";
 export {
   SAFE_CAPTURE_ERROR_CODES,
   type SafeCaptureErrorCode,
 } from "./error-codes";
+export { appRunIdSchema, type AppRunId } from "./run-id";
 
 const supportedCountrySchema = z.enum(SUPPORTED_COUNTRIES);
 
@@ -23,6 +25,8 @@ export const captureRequestSchema = z
   .object({
     url: httpsUrlSchema,
     country: supportedCountrySchema,
+    runId: appRunIdSchema,
+    attempt: z.number().int().min(1).max(99),
   })
   .strict();
 
@@ -43,13 +47,26 @@ export const pageEvidenceSchema = z
   })
   .strict();
 
+const sessionRefSchema = z.string().regex(/^sol_[0-9a-f]{20}$/);
+
+export const captureCorrelationSchema = z
+  .object({
+    runId: appRunIdSchema,
+    country: supportedCountrySchema,
+    attempt: z.number().int().min(1).max(99),
+    sessionRef: sessionRefSchema,
+  })
+  .strict();
+
 const captureReceiptSchema = z
   .object({
+    runId: appRunIdSchema,
     country: supportedCountrySchema,
+    attempt: z.number().int().min(1).max(99),
+    sessionRef: sessionRefSchema.nullable(),
     proxyCountry: supportedCountrySchema,
     proxyTier: z.literal("residential"),
     timezoneId: z.string().max(100).nullable(),
-    sessionId: z.string().min(1).max(500),
     recordingRequested: z.literal(true),
   })
   .strict();
@@ -74,6 +91,7 @@ const captureSuccessSchema = z
 const captureFailureSchema = z
   .object({
     ok: z.literal(false),
+    correlation: captureCorrelationSchema.nullable(),
     error: z
       .object({
         code: z.enum(SAFE_CAPTURE_ERROR_CODES),
@@ -122,13 +140,20 @@ export const reportSchema = z
     status: z.enum(["complete", "partial"]),
     mode: z.enum(["sample", "live"]),
     requestedUrl: httpsUrlSchema,
-    countries: z.array(supportedCountrySchema).min(2).max(CAPTURE_LIMITS.maxCountries),
-    results: z.array(reportResultSchema).min(1).max(CAPTURE_LIMITS.maxCountries),
+    countries: z
+      .array(supportedCountrySchema)
+      .min(2)
+      .max(CAPTURE_LIMITS.maxSelectedCountries),
+    results: z
+      .array(reportResultSchema)
+      .min(1)
+      .max(CAPTURE_LIMITS.maxSelectedCountries),
     generatedAt: z.iso.datetime({ offset: true }),
   })
   .strict();
 
 export type CaptureRequest = z.infer<typeof captureRequestSchema>;
+export type CaptureCorrelation = z.infer<typeof captureCorrelationSchema>;
 export type PageEvidence = z.infer<typeof pageEvidenceSchema>;
 export type CaptureReceipt = z.infer<typeof captureReceiptSchema>;
 export type CaptureSuccess = z.infer<typeof captureSuccessSchema>;

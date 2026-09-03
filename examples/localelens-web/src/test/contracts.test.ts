@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  captureCorrelationSchema,
   captureRequestSchema,
   captureResponseSchema,
   pageEvidenceSchema,
   reportSchema,
+  SUPPORTED_COUNTRIES,
 } from "@/src/features/capture/contracts";
+
+const runId = "llr_123e4567-e89b-42d3-a456-426614174000";
+const sessionRef = "sol_0123456789abcdefabcd";
 
 const validEvidence = {
   requestedUrl: "https://example.com",
@@ -27,7 +32,9 @@ const validReceipt = {
   proxyCountry: "gb" as const,
   proxyTier: "residential" as const,
   timezoneId: "Europe/London",
-  sessionId: "synthetic-test-session",
+  runId,
+  attempt: 1,
+  sessionRef,
   recordingRequested: true as const,
 };
 
@@ -45,16 +52,40 @@ const validCapture = {
 };
 
 describe("captureRequestSchema", () => {
-  it("accepts a supported country and public HTTPS URL", () => {
-    expect(
-      captureRequestSchema.parse({
+  it("accepts every documented residential-proxy market with safe run context", () => {
+    expect(SUPPORTED_COUNTRIES).toEqual([
+      "au",
+      "br",
+      "ca",
+      "de",
+      "es",
+      "fr",
+      "gb",
+      "in",
+      "it",
+      "jp",
+      "kr",
+      "mx",
+      "nl",
+      "sg",
+      "us",
+    ]);
+
+    for (const country of SUPPORTED_COUNTRIES) {
+      expect(
+        captureRequestSchema.parse({
+          url: "https://example.com",
+          country,
+          runId,
+          attempt: 1,
+        }),
+      ).toEqual({
         url: "https://example.com",
-        country: "gb",
-      }),
-    ).toEqual({
-      url: "https://example.com",
-      country: "gb",
-    });
+        country,
+        runId,
+        attempt: 1,
+      });
+    }
   });
 
   it("rejects unsupported countries", () => {
@@ -62,6 +93,8 @@ describe("captureRequestSchema", () => {
       captureRequestSchema.parse({
         url: "https://example.com",
         country: "xx",
+        runId,
+        attempt: 1,
       }),
     ).toThrow();
   });
@@ -71,6 +104,41 @@ describe("captureRequestSchema", () => {
       captureRequestSchema.parse({
         url: "http://example.com",
         country: "gb",
+        runId,
+        attempt: 1,
+      }),
+    ).toThrow();
+  });
+
+  it.each([
+    { runId: "llr_bad", attempt: 1 },
+    { runId, attempt: 0 },
+    { runId, attempt: 100 },
+  ])("rejects malformed run context %#", (context) => {
+    expect(() =>
+      captureRequestSchema.parse({
+        url: "https://example.com",
+        country: "gb",
+        ...context,
+      }),
+    ).toThrow();
+  });
+});
+
+describe("captureCorrelationSchema", () => {
+  it("accepts only app-owned IDs and non-reversible provider references", () => {
+    const correlation = {
+      runId,
+      country: "gb" as const,
+      attempt: 1,
+      sessionRef,
+    };
+
+    expect(captureCorrelationSchema.parse(correlation)).toEqual(correlation);
+    expect(() =>
+      captureCorrelationSchema.parse({
+        ...correlation,
+        sessionRef: "synthetic-test-session",
       }),
     ).toThrow();
   });
@@ -164,6 +232,7 @@ describe("captureResponseSchema", () => {
     expect(() =>
       captureResponseSchema.parse({
         ok: false,
+        correlation: null,
         error: {
           code: "UPSTREAM_RAW_ERROR",
           message: "Synthetic failure",
@@ -222,14 +291,27 @@ describe("reportSchema", () => {
     expect(reportSchema.parse(report)).toEqual(report);
   });
 
-  it("caps reports at three countries", () => {
+  it("accepts fifteen countries and rejects a sixteenth entry", () => {
+    const countries = [...SUPPORTED_COUNTRIES];
+    expect(
+      reportSchema.parse({
+        schemaVersion: 1,
+        status: "partial",
+        mode: "live",
+        requestedUrl: "https://example.com",
+        countries,
+        results: [{ country: "gb", evidence: validEvidence }],
+        generatedAt: "2026-09-01T12:01:00.000Z",
+      }).countries,
+    ).toEqual(countries);
+
     expect(() =>
       reportSchema.parse({
         schemaVersion: 1,
         status: "complete",
         mode: "sample",
         requestedUrl: "https://example.com",
-        countries: ["us", "gb", "de", "fr"],
+        countries: [...countries, "us"],
         results: [{ country: "gb", evidence: validEvidence }],
         generatedAt: "2026-09-01T12:01:00.000Z",
       }),

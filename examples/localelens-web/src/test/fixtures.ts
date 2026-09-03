@@ -8,6 +8,7 @@ import type {
 type SampleCountry = Extract<SupportedCountry, "us" | "gb" | "de">;
 
 const requestedUrl = "https://regional.example.test/pricing";
+const sampleRunId = "llr_00000000-0000-4000-8000-000000000000";
 
 function createSampleCapture(
   country: SampleCountry,
@@ -23,7 +24,9 @@ function createSampleCapture(
       proxyCountry: country,
       proxyTier: "residential",
       timezoneId,
-      sessionId: `synthetic-local-fixture-${country}`,
+      runId: sampleRunId,
+      attempt: 1,
+      sessionRef: null,
       recordingRequested: true,
     },
     screenshot: {

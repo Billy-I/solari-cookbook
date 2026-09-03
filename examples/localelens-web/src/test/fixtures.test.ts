@@ -23,8 +23,11 @@ describe("redacted regional fixtures", () => {
   });
 
   it("contains no provider secrets or session-control material", () => {
-    expect(JSON.stringify(sampleReport)).not.toMatch(
+    const serialized = JSON.stringify({ sampleCaptureByCountry, sampleReport });
+
+    expect(serialized).not.toMatch(
       /slr_live_|apiKey|sessionId|replayUrl/i,
     );
+    expect(serialized).not.toMatch(/sol_[0-9a-f]{20}/i);
   });
 });

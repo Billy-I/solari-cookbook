@@ -5,5 +5,6 @@ export const CAPTURE_LIMITS = {
   screenshotBytes: 1_500_000,
   responseBytes: 3_000_000,
   exportBytes: 262_144,
-  maxCountries: 3,
+  maxSelectedCountries: 15,
+  maxConcurrentCaptures: 3,
 } as const;

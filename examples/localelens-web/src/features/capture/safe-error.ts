@@ -1,4 +1,8 @@
-import type { CaptureFailure, SafeCaptureErrorCode } from "./contracts";
+import type {
+  CaptureCorrelation,
+  CaptureFailure,
+  SafeCaptureErrorCode,
+} from "./contracts";
 
 type ErrorLike = {
   message?: unknown;
@@ -51,9 +55,11 @@ const safeErrors: Record<
 function failure(
   code: SafeCaptureErrorCode,
   retryable = safeErrors[code].retryable,
+  correlation: CaptureCorrelation | null = null,
 ): CaptureFailure {
   return {
     ok: false,
+    correlation,
     error: {
       code,
       message: safeErrors[code].message,
@@ -62,31 +68,34 @@ function failure(
   };
 }
 
-export function toSafeCaptureFailure(error: unknown): CaptureFailure {
+export function toSafeCaptureFailure(
+  error: unknown,
+  correlation: CaptureCorrelation | null = null,
+): CaptureFailure {
   const candidate =
     typeof error === "object" && error !== null ? (error as ErrorLike) : {};
   const message = typeof candidate.message === "string" ? candidate.message : "";
   const status = typeof candidate.status === "number" ? candidate.status : undefined;
 
   if (Object.hasOwn(safeErrors, message)) {
-    return failure(message as SafeCaptureErrorCode);
+    return failure(message as SafeCaptureErrorCode, undefined, correlation);
   }
 
   if (candidate.name === "TimeoutError") {
-    return failure("NAVIGATION_TIMEOUT");
+    return failure("NAVIGATION_TIMEOUT", undefined, correlation);
   }
 
   if (status === 401 || status === 403) {
-    return failure("SOLARI_AUTH");
+    return failure("SOLARI_AUTH", undefined, correlation);
   }
 
   if (status === 429) {
-    return failure("SOLARI_CAPACITY", false);
+    return failure("SOLARI_CAPACITY", false, correlation);
   }
 
   if (status === 502 || status === 503 || status === 504) {
-    return failure("SOLARI_CAPACITY");
+    return failure("SOLARI_CAPACITY", undefined, correlation);
   }
 
-  return failure("CAPTURE_FAILED");
+  return failure("CAPTURE_FAILED", undefined, correlation);
 }

@@ -55,6 +55,7 @@ describe("toSafeCaptureFailure", () => {
 
     expect(result).toEqual({
       ok: false,
+      correlation: null,
       error: {
         code: "CAPTURE_FAILED",
         message: "The regional capture could not be completed.",
@@ -68,5 +69,18 @@ describe("toSafeCaptureFailure", () => {
       ok: false,
       error: { code: "CAPTURE_FAILED" },
     });
+  });
+
+  it("retains only an explicitly supplied safe correlation", () => {
+    const correlation = {
+      runId: "llr_123e4567-e89b-42d3-a456-426614174000",
+      country: "fr" as const,
+      attempt: 1,
+      sessionRef: "sol_0123456789abcdefabcd",
+    };
+
+    expect(
+      toSafeCaptureFailure(new Error("CAPTURE_FAILED"), correlation),
+    ).toMatchObject({ correlation });
   });
 });
