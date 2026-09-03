@@ -52,6 +52,23 @@ describe("ExportActions", () => {
     ).toBeVisible();
   });
 
+  it("describes the pending live action without calling it a featured demo", () => {
+    render(
+      <ExportActions
+        mode="live"
+        regions={completeRegions}
+        runId={null}
+        status="idle"
+        target="https://regional.example.test/pricing"
+      />,
+    );
+
+    expect(
+      screen.getByText("Run a live comparison to create an exportable receipt."),
+    ).toBeVisible();
+    expect(screen.queryByText(/featured demo/i)).not.toBeInTheDocument();
+  });
+
   it("exports an honest partial report after two successes and revokes its object URL", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-02T08:09:10.000Z"));

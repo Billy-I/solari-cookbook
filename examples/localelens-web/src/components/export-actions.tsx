@@ -91,7 +91,9 @@ export function ExportActions({
       </button>
       <p id="export-note">
         {!runId
-          ? "Run the featured demo to create an exportable receipt."
+          ? mode === "sample"
+            ? "Run the featured demo to create an exportable receipt."
+            : "Run a live comparison to create an exportable receipt."
           : !enabled
             ? "Available after 2 regional captures succeed."
             : complete
