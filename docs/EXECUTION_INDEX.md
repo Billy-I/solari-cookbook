@@ -1,6 +1,6 @@
 # LocaleLens Execution Index
 
-Status: Phase 4 owner accepted; Phase 5 Tasks 1–3 locally frozen with concerns; Task 4 not started
+Status: Live Product Readiness implemented; non-live gate PASS; live UI-only proof NOT RUN
 
 Owner: Billy Tompazis
 
@@ -12,7 +12,7 @@ This is the controlling index for the LocaleLens build. Each phase begins from a
 
 ## Product in one sentence
 
-LocaleLens is a responsive web application that captures one public HTTPS page through two or three Solari regional browser sessions and presents screenshots, deterministic content differences, and replay-backed run receipts for product, growth, localization, and QA review.
+LocaleLens is a responsive web application that compares one public HTTPS page across 2 to 15 selected Solari proxy markets in deterministic batches of at most three active captures and presents decision signals, screenshots, normalized differences, and safe run receipts.
 
 ## Privacy boundary
 
@@ -31,6 +31,7 @@ LocaleLens is a responsive web application that captures one public HTTPS page t
 | 3 — Live comparison | Independent two/three-country runs, partial success, retry, deterministic comparison, export | ≤4 | Reducer/orchestration tests, bounded live comparison, export safety | No release hardening or public action |
 | 4 — Hardening | Accessibility, security, performance, E2E, visual, and live evidence register | ≤4 | Complete local gate, measured client budget, qualified evidence classes | No push, deploy, or post |
 | 5 — Submission | Public fork, safe sample deployment, reviewer materials, approved social post | 0 by default | Remote SHA parity, deployment inspection, redaction and owner approvals | No unapproved external mutation |
+| Live Product Readiness | Truthful demo/live modes, expanded verified market catalogue, bounded batching, decision-first partial results, and safe UI-to-session attribution | ≤4, only after all non-live gates | Full local gate plus one four-market UI-only run and dashboard correlation | No push, PR, deploy, publish, submit, or release |
 
 ## Documents
 
@@ -46,6 +47,13 @@ LocaleLens is a responsive web application that captures one public HTTPS page t
 4. [`superpowers/plans/2026-09-01-localelens-phase-3-live-comparison.md`](superpowers/plans/2026-09-01-localelens-phase-3-live-comparison.md)
 5. [`superpowers/plans/2026-09-01-localelens-phase-4-hardening.md`](superpowers/plans/2026-09-01-localelens-phase-4-hardening.md)
 6. [`superpowers/plans/2026-09-01-localelens-phase-5-submission.md`](superpowers/plans/2026-09-01-localelens-phase-5-submission.md)
+7. [`superpowers/plans/2026-09-03-localelens-live-product-readiness.md`](superpowers/plans/2026-09-03-localelens-live-product-readiness.md)
+
+### Successor product-readiness design and evidence
+
+- [`superpowers/specs/2026-09-03-localelens-live-product-readiness-design.md`](superpowers/specs/2026-09-03-localelens-live-product-readiness-design.md)
+- [`../examples/localelens-web/docs/evidence/live-product-readiness/README.md`](../examples/localelens-web/docs/evidence/live-product-readiness/README.md)
+- [`../examples/localelens-web/docs/evidence/live-product-readiness/manual-acceptance.md`](../examples/localelens-web/docs/evidence/live-product-readiness/manual-acceptance.md)
 
 ### Start handoff
 
@@ -81,6 +89,7 @@ Complete this table only with verified Git evidence during execution.
 | 3 | `026b6ffe4d3faca5e8c02c29885846675e699cfd` | `06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` | PASS: 210 tests, typecheck, lint, build, bounded live comparison, replay checks, export safety | 4 capture + 3 replay | Yes |
 | 4 | `06bfba6efd2c9ef4ef98cc0eb9266afd377082fa` | `ec05f42bfadce32a406ffd1e883c03582aacfb90` | PASS: owner accepted qualified local evidence | 4 capture + 6 replay | Yes |
 | 5 | `ec05f42bfadce32a406ffd1e883c03582aacfb90` | Local freeze; terminal SHA reported externally | Tasks 1–3 locally frozen with concerns; Task 4 not started; all external actions remain unauthorized | 0 | No |
+| Live Product Readiness | `00828fa6509a051a92aca521f5b201946c1172db` | Terminal evidence SHA reported externally | PASS: 277 tests, typecheck, lint, build, budget, API methods, 7/7 sample E2E, Browser at 360/1440, axe and keyboard checks; live UI-only proof NOT RUN because the runtime key was absent | 0 | No |
 
 ## Evidence classes
 
@@ -112,10 +121,11 @@ Runtime dependencies are limited to Next.js, React, React DOM, Tailwind CSS, Luc
 
 ## Current next gate
 
-Phase 4 is owner accepted at
-`ec05f42bfadce32a406ffd1e883c03582aacfb90`, with qualified evidence recorded
-in [`phase-4.md`](../examples/localelens-web/docs/evidence/phase-4.md). Phase 5
-Tasks 1–3 are locally frozen with concerns on
-`codex/localelens-phase-5-submission`, created directly from that exact
-accepted predecessor. Task 4 is not started. Push, deployment, publication,
-submission, posting, pull request, and merge remain unauthorized.
+Live Product Readiness is implemented locally on
+`codex/localelens-live-product-readiness`, created directly from the published
+Phase 5 checkpoint `00828fa6509a051a92aca521f5b201946c1172db`. The non-live
+gate passes and used zero provider calls. The required four-market UI-only
+Solari and dashboard proof is `NOT RUN` because no runtime key was available;
+therefore live-provider and release readiness remain unproved. Push,
+deployment, publication, submission, posting, pull request, merge, and release
+remain unauthorized.
