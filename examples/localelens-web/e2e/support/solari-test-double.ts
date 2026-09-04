@@ -3,6 +3,7 @@ import type { Page, Route } from "@playwright/test";
 export type SolariTestDouble = {
   authenticationCalls: string[];
   captureCalls: Array<{ country: string; attempt: number }>;
+  replayCalls: string[];
   install(page: Page): Promise<void>;
 };
 
@@ -21,11 +22,13 @@ function json(route: Route, body: unknown, status = 200) {
 export function createSolariTestDouble(): SolariTestDouble {
   const authenticationCalls: string[] = [];
   const captureCalls: Array<{ country: string; attempt: number }> = [];
+  const replayCalls: string[] = [];
   let ready = false;
 
   return {
     authenticationCalls,
     captureCalls,
+    replayCalls,
     async install(page) {
       await page.route("**/api/solari-session", async (route) => {
         const request = route.request();
@@ -124,10 +127,72 @@ export function createSolariTestDouble(): SolariTestDouble {
         if (route.request().method() !== "GET") {
           return route.fulfill({ status: 405 });
         }
-        return route.fulfill({
-          body: "synthetic replay",
-          contentType: "text/plain",
-          status: 200,
+        const mode = new URL(route.request().url()).searchParams.get("mode");
+        replayCalls.push(mode ?? "status");
+        if (mode !== "events") return json(route, { status: "ready" });
+
+        return json(route, {
+          status: "ready",
+          events: [
+            {
+              type: 4,
+              timestamp: 1_000,
+              data: {
+                href: "https://public.synthetic.test/pricing",
+                width: 1280,
+                height: 720,
+              },
+            },
+            {
+              type: 2,
+              timestamp: 1_001,
+              data: {
+                node: {
+                  type: 0,
+                  id: 1,
+                  childNodes: [
+                    {
+                      type: 2,
+                      id: 2,
+                      tagName: "html",
+                      attributes: {},
+                      childNodes: [
+                        {
+                          type: 2,
+                          id: 3,
+                          tagName: "head",
+                          attributes: {},
+                          childNodes: [],
+                        },
+                        {
+                          type: 2,
+                          id: 4,
+                          tagName: "body",
+                          attributes: {},
+                          childNodes: [
+                            {
+                              type: 2,
+                              id: 5,
+                              tagName: "h1",
+                              attributes: {},
+                              childNodes: [
+                                {
+                                  type: 3,
+                                  id: 6,
+                                  textContent: "Synthetic replay",
+                                },
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+                initialOffset: { left: 0, top: 0 },
+              },
+            },
+          ],
         });
       });
     },

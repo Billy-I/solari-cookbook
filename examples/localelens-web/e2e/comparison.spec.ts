@@ -54,6 +54,16 @@ test("desktop connection and comparison are explicit, live-only, and retry-safe"
   await expect(page.getByText("Live evidence")).toHaveCount(2);
   await expect(page.getByText("CAPTURE_FAILED", { exact: true })).toBeVisible();
   await expect(page.getByText("Partial report: 2 of 3 captures succeeded.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Watch replay" })).toHaveCount(2);
+  expect(testDouble.replayCalls.filter((call) => call === "events")).toHaveLength(0);
+
+  await page.getByRole("button", { name: "Watch replay" }).first().click();
+  await expect(page.getByRole("dialog", { name: "Session replay" })).toBeVisible();
+  await expect(page.getByText("Replay ready")).toBeVisible();
+  await expect(page.locator(".rr-controller")).toBeVisible();
+  expect(testDouble.replayCalls.filter((call) => call === "events")).toHaveLength(1);
+  await page.getByRole("button", { name: "Close replay" }).click();
+  await expect(page.getByRole("dialog", { name: "Session replay" })).toHaveCount(0);
 
   const partialDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download JSON" }).click();
