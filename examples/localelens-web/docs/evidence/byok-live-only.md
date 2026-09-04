@@ -285,6 +285,10 @@ replace or revise the 2026-09-03 evidence above.
   no automatic or explicit capture retry occurred, and no second comparison was
   run. The count mismatch is retained as a procedural deviation; it is not
   rewritten as exact-count approval.
+- Post-run disposition: after the eight-capture count and deviation were
+  disclosed, the owner explicitly accepted this eight-market run as the final
+  follow-up evidence and authorized publication. That later acceptance does not
+  retroactively replace the original two-capture action-time approval.
 - UI outcome: **Comparison complete**, `8 of 8 captures finished`, `8`
   successful and `0` failed. Evidence availability and routing were consistent;
   localization and consent were marked **Needs attention**. Every result was
