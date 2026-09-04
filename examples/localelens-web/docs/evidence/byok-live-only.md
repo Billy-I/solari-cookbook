@@ -250,3 +250,132 @@ repository-settings change, or hosted-CI inspection occurred.
   new process correctly treats as missing.
 - Direct assistive-technology behavior remains `NOT PROVEN` despite automated
   Axe and keyboard evidence.
+
+---
+
+## 2026-09-04 replay viewer and comparison-UI follow-up
+
+This addendum records a separate UI and replay-acceptance pass. It does not
+replace or revise the 2026-09-03 evidence above.
+
+### Follow-up checkpoint lineage
+
+| Commit | Checkpoint |
+| --- | --- |
+| `62bd34b0cb7f55f584d17ac17a324bbfefccb202` | Clarify comparison progress, status, and evidence presentation |
+| `f8b058921620dd98bbc15a0eade04ade529b44cb` | Add the bounded, owner-isolated in-app replay viewer |
+| `7c2bf4c941135f0271dc7aedbbef06bbaa963478` | Cover the visual replay journey and responsive layout |
+| `1156175c62fd2c22a772e0f09ec06ef160d43c9d` | Verify truthful in-app replay-data export |
+
+### Follow-up live observation
+
+- Runtime: one normal long-lived Node `v22.22.2` development instance at
+  `http://127.0.0.1:34126/`; no owner key was provided through an environment
+  variable, file, terminal command, log, screenshot, or chat.
+- Authentication: the owner entered the key only through the visible masked
+  UI. One owner connection action was observed and the UI reached **Ready for
+  this session**. Network-level authentication-request instrumentation was not
+  added for this manual pass, so the count is qualified as UI-observed.
+- Proposed and approved spend: `https://example.com/`, `GB` — United Kingdom
+  and `US` — United States, for exactly `2` initial captures and no retry.
+- Actual visible run: the comparison was started once with eight markets still
+  selected: `BR`, `ES`, `FR`, `GB`, `IT`, `JP`, `KR`, and `US`. This consumed
+  exactly `8` initial billable captures, not the approved two. All eight
+  completed in three deterministic batches of at most three. No capture failed,
+  no automatic or explicit capture retry occurred, and no second comparison was
+  run. The count mismatch is retained as a procedural deviation; it is not
+  rewritten as exact-count approval.
+- UI outcome: **Comparison complete**, `8 of 8 captures finished`, `8`
+  successful and `0` failed. Evidence availability and routing were consistent;
+  localization and consent were marked **Needs attention**. Every result was
+  live provider evidence for `https://example.com/`; no fixture or sample
+  fallback appeared.
+- Replay: Brazil reached **Replay ready**. Pressing **Watch replay** once opened
+  a large in-app rrweb player with a visible recorded page, timeline, play,
+  speed, skip-inactive, fullscreen, close, and developer-data controls. Closing
+  the player returned to the expanded results. The other seven replay states
+  were pending at the last observation; none was rechecked, no provider retry
+  was attempted, and pending replay did not block the completed comparison.
+- Developer data: the UI exports the already-loaded replay events as a named
+  `.ndjson` file rather than presenting the provider's `.ndjson.gz` transport
+  artifact as an end-user archive. The synthetic browser journey verifies that
+  this export makes no additional replay-provider request.
+- Solari dashboard delta: `NOT PROVEN`. No immediate before-run baseline was
+  recorded for this separate follow-up, so the visible eight-result UI is not
+  used to infer a dashboard-row delta.
+- Disconnect: visible **Disconnect** returned the masked API-key form and
+  disabled **Compare live through Solari**.
+- Shutdown: the verified process chain was npm PID `53263`, Next CLI PID
+  `53274`, and listener PID `53276`, rooted in
+  `/Volumes/SECA-Wikidata/seca-artifacts/LocaleLens/examples/localelens-web`.
+  Only the exact Next CLI PID received `SIGTERM`; all three PIDs exited and
+  `127.0.0.1:34126` had no listener afterward.
+
+### Follow-up final credential-free gate
+
+Every qualifying command below used the required Node `v22.22.2` PATH and ran
+after the live session was disconnected and its exact server was stopped.
+
+```text
+node --version
+PASS — v22.22.2
+
+npm test
+PASS — 35 files, 356 tests
+
+npm run typecheck
+PASS
+
+npm run lint
+PASS
+
+npm run build
+PASS — production build; no provider call
+
+npm run check:budget
+PASS — 155,717 B gzip total; 184,320 B ceiling
+
+npm run check:api-methods
+PASS — allowed and guarded capture, replay, and credential-session methods;
+TRACE NOT_PROVEN because Node rejected it before the application Proxy
+
+npm run check:production-boundaries
+PASS — 121 files scanned
+
+npm run test:e2e
+PASS — 7/7 Chromium tests
+
+git diff --check
+PASS — no output
+```
+
+The four protected-path hashes exactly matched the pre-task hashes recorded in
+the historical evidence above. `next-env.d.ts`, `AGENTS.md`, `CLAUDE.md`, and
+`test-results/` remained unstaged and were not deleted or overwritten.
+
+### Follow-up boundary verdicts
+
+- Authentication requests: `1` UI-observed owner connection action.
+- Billable initial captures: `8`.
+- Billable capture retries: `0`.
+- Additional comparison runs: `0`.
+- Additional replay availability checks after the one successful Brazil viewer
+  load: `0`.
+- Pull request, merge, deployment, release, repository-settings change, and
+  hosted-CI inspection: none.
+- Supported credential topology remains one long-lived Node instance. Serverless
+  and multi-instance operation remain unsupported and unclaimed.
+
+### Follow-up remaining risks
+
+- The actual eight-market run exceeded the separately stated and approved
+  two-capture proposal. The successful provider result is real, but the
+  exact-count acceptance condition is procedurally deviated and must not be
+  reported as an exact match.
+- The dashboard delta for this follow-up is `NOT PROVEN` because there was no
+  immediate pre-run baseline.
+- Seven replay artifacts remained pending at the last observation. Only the
+  Brazil in-app replay path received live visual acceptance.
+- Live evidence covers one public target and a single-instance development
+  server; hosted HTTPS, serverless, horizontal scaling, and broader provider
+  reliability remain unproven.
