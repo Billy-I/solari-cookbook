@@ -10,6 +10,7 @@ const {
   lookupRunSession,
   sessionsDelete,
   sessionsResolve,
+  validatePublicUrl,
 } = vi.hoisted(() => {
   const getReplayUrl = vi.fn();
   const client = {
@@ -25,11 +26,13 @@ const {
     lookupRunSession: vi.fn(),
     sessionsDelete: vi.fn(),
     sessionsResolve: vi.fn(),
+    validatePublicUrl: vi.fn(async (url: string) => new URL(url)),
   };
 });
 
 vi.mock("@/src/lib/solari", () => ({ createSolariClient }));
 vi.mock("@/src/lib/server-observability", () => ({ logServerEvent }));
+vi.mock("@/src/features/capture/validate-public-url", () => ({ validatePublicUrl }));
 vi.mock("@/src/features/capture/run-session-registry", () => ({
   deleteRunSessionsForOwner,
   lookupRunSession,
@@ -52,7 +55,7 @@ const runId = "llr_123e4567-e89b-42d3-a456-426614174000";
 const sessionRef = "sol_dab46ee6c619545d0534";
 
 function replayRequest(
-  overrides: Partial<Record<"runId" | "country" | "attempt", string>> = {},
+  overrides: Partial<Record<"runId" | "country" | "attempt" | "mode", string>> = {},
   headers: Record<string, string> = {},
 ): NextRequest {
   const query = new URLSearchParams({
@@ -89,6 +92,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   createSolariClient.mockClear();
   getReplayUrl.mockReset();
   client.close.mockReset();
@@ -189,7 +193,7 @@ describe("GET /api/replays/:id", () => {
     expect(client.close).toHaveBeenCalledOnce();
   });
 
-  it("returns only a validated temporary HTTPS replay URL", async () => {
+  it("returns readiness without exposing the temporary replay URL", async () => {
     getReplayUrl.mockResolvedValue({
       url: "https://storage.getsolari.com/replay.ndjson.gz?signature=temporary",
       expiresInSeconds: 900,
@@ -199,10 +203,7 @@ describe("GET /api/replays/:id", () => {
     const response = await GET(replayRequest(), routeContext(sessionRef));
 
     expect(response.status).toBe(200);
-    expect(await expectNoStore(response)).toEqual({
-      status: "ready",
-      replayUrl: "https://storage.getsolari.com/replay.ndjson.gz?signature=temporary",
-    });
+    expect(await expectNoStore(response)).toEqual({ status: "ready" });
     expect(lookupRunSession).toHaveBeenCalledWith(ownerId, {
       runId,
       country: "us",
@@ -215,6 +216,72 @@ describe("GET /api/replays/:id", () => {
     expect(getReplayUrl).toHaveBeenCalledWith(rawSessionId);
     expect(getReplayUrl).toHaveBeenCalledOnce();
     expect(client.close).toHaveBeenCalledOnce();
+  });
+
+  it("returns bounded replay events when explicitly requested", async () => {
+    getReplayUrl.mockResolvedValue({
+      url: "https://storage.getsolari.com/replay.ndjson.gz?signature=temporary",
+    });
+    const events = [
+      { type: 4, timestamp: 1_000, data: { href: "https://example.com/" } },
+      { type: 2, timestamp: 1_001, data: { node: { type: 0, childNodes: [] } } },
+    ];
+    const downloadReplay = vi.fn().mockResolvedValue(
+      new Response(`${events.map((event) => JSON.stringify(event)).join("\n")}\n`, {
+        status: 200,
+        headers: { "Content-Type": "application/x-ndjson" },
+      }),
+    );
+    vi.stubGlobal("fetch", downloadReplay);
+
+    const response = await GET(
+      replayRequest({ mode: "events" }),
+      routeContext(sessionRef),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await expectNoStore(response)).toEqual({ status: "ready", events });
+    expect(validatePublicUrl).toHaveBeenCalledWith(
+      "https://storage.getsolari.com/replay.ndjson.gz?signature=temporary",
+    );
+    expect(downloadReplay).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({ redirect: "manual", cache: "no-store" }),
+    );
+  });
+
+  it("fails closed when the replay download redirects", async () => {
+    getReplayUrl.mockResolvedValue({ url: "https://storage.getsolari.com/replay" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(null, { status: 302, headers: { Location: "https://elsewhere.test/" } }),
+      ),
+    );
+
+    const response = await GET(
+      replayRequest({ mode: "events" }),
+      routeContext(sessionRef),
+    );
+
+    expect(response.status).toBe(502);
+    expect(await expectNoStore(response)).toEqual({ status: "unavailable" });
+  });
+
+  it("rejects a replay download URL that does not resolve as public", async () => {
+    getReplayUrl.mockResolvedValue({ url: "https://storage.getsolari.com/replay" });
+    validatePublicUrl.mockRejectedValueOnce(new Error("PRIVATE_TARGET_BLOCKED"));
+    const downloadReplay = vi.fn();
+    vi.stubGlobal("fetch", downloadReplay);
+
+    const response = await GET(
+      replayRequest({ mode: "events" }),
+      routeContext(sessionRef),
+    );
+
+    expect(response.status).toBe(502);
+    expect(await expectNoStore(response)).toEqual({ status: "unavailable" });
+    expect(downloadReplay).not.toHaveBeenCalled();
   });
 
   it("rejects a non-HTTPS provider replay URL", async () => {

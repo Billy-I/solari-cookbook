@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createSolariClient } from "@/src/lib/solari";
 import { logServerEvent } from "@/src/lib/server-observability";
+import { validatePublicUrl } from "@/src/features/capture/validate-public-url";
 import {
   captureCorrelationSchema,
 } from "@/src/features/capture/contracts";
@@ -18,6 +19,10 @@ import {
   assertAppRequest,
   isSecureApplicationRequest,
 } from "@/src/features/credential/request-security";
+import {
+  MAX_REPLAY_DOWNLOAD_BYTES,
+  parseReplayPayload,
+} from "@/src/features/replay/parse-replay";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,6 +65,43 @@ function errorStatus(error: unknown): number | undefined {
   return typeof error.status === "number" ? error.status : undefined;
 }
 
+async function readBoundedBody(response: Response): Promise<Uint8Array> {
+  const contentLength = response.headers.get("content-length");
+  if (
+    contentLength !== null &&
+    (!/^\d+$/u.test(contentLength) || Number(contentLength) > MAX_REPLAY_DOWNLOAD_BYTES)
+  ) {
+    throw new Error("REPLAY_TOO_LARGE");
+  }
+  if (!response.body) throw new Error("INVALID_REPLAY");
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_REPLAY_DOWNLOAD_BYTES) {
+        await reader.cancel();
+        throw new Error("REPLAY_TOO_LARGE");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const result = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result;
+}
+
 export async function GET(
   request: NextRequest,
   context: ReplayContext,
@@ -83,6 +125,10 @@ export async function GET(
   }
 
   const requestUrl = new URL(request.url);
+  const mode = requestUrl.searchParams.get("mode");
+  if (mode !== null && mode !== "events") {
+    return json({ status: "unavailable" }, 400);
+  }
   const attempt = requestUrl.searchParams.get("attempt");
   const parsedCorrelation = captureCorrelationSchema.safeParse({
     runId: requestUrl.searchParams.get("runId"),
@@ -131,8 +177,30 @@ export async function GET(
         (replayUrl.port && replayUrl.port !== "443")
       ) {
         response = json({ status: "unavailable" }, 502);
+      } else if (mode === "events") {
+        const safeReplayUrl = await validatePublicUrl(replayUrl.href);
+        const replayResponse = await fetch(safeReplayUrl, {
+          cache: "no-store",
+          headers: {
+            Accept: "application/x-ndjson, application/gzip;q=0.9, application/octet-stream;q=0.8",
+          },
+          redirect: "manual",
+          signal: AbortSignal.any([
+            request.signal,
+            AbortSignal.timeout(15_000),
+          ]),
+        });
+        if (
+          !replayResponse.ok ||
+          replayResponse.redirected ||
+          (replayResponse.url && replayResponse.url !== safeReplayUrl.href)
+        ) {
+          throw new Error("INVALID_REPLAY_RESPONSE");
+        }
+        const events = parseReplayPayload(await readBoundedBody(replayResponse));
+        response = json({ status: "ready", events }, 200);
       } else {
-        response = json({ status: "ready", replayUrl: replayUrl.href }, 200);
+        response = json({ status: "ready" }, 200);
       }
     } catch (error) {
       const status = errorStatus(error);

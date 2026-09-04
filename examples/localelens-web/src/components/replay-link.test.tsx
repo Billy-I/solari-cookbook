@@ -4,6 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ReplayLink } from "@/src/components/replay-link";
 
+vi.mock("rrweb-player", () => ({
+  default: class {
+    $destroy() {}
+  },
+}));
+
 const correlation = {
   runId: "llr_123e4567-e89b-42d3-a456-426614174000",
   country: "us" as const,
@@ -27,7 +33,7 @@ describe("ReplayLink", () => {
       </StrictMode>,
     );
 
-    expect(screen.getByText("Replay pending")).toBeVisible();
+    expect(screen.getByText("Checking replay")).toBeVisible();
     expect(screen.queryByRole("link", { name: /replay/i })).not.toBeInTheDocument();
     rerender(
       <StrictMode>
@@ -36,6 +42,7 @@ describe("ReplayLink", () => {
     );
 
     await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Replay pending")).toBeVisible();
     expect(fetchReplay).toHaveBeenCalledWith(
       "/api/replays/sol_dab46ee6c619545d0534?runId=llr_123e4567-e89b-42d3-a456-426614174000&country=us&attempt=1",
       expect.objectContaining({
@@ -58,7 +65,6 @@ describe("ReplayLink", () => {
         new Response(
           JSON.stringify({
             status: "ready",
-            replayUrl: "https://replay.example.test/session?token=temporary",
           }),
           { status: 200 },
         ),
@@ -69,9 +75,10 @@ describe("ReplayLink", () => {
 
     const recheck = await screen.findByRole("button", { name: "Check replay availability" });
     expect(screen.queryByRole("link", { name: /replay/i })).not.toBeInTheDocument();
+    await waitFor(() => expect(recheck).toBeEnabled());
     fireEvent.click(recheck);
 
-    expect(await screen.findByRole("link", { name: "Download replay data" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Watch replay" })).toBeVisible();
     expect(fetchReplay).toHaveBeenCalledTimes(2);
   });
 
@@ -88,48 +95,52 @@ describe("ReplayLink", () => {
 
     render(<ReplayLink correlation={correlation} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Check replay availability" }));
+    const recheck = await screen.findByRole("button", { name: "Check replay availability" });
+    await waitFor(() => expect(recheck).toBeEnabled());
+    fireEvent.click(recheck);
     expect(await screen.findByText("Replay unavailable")).toBeVisible();
     expect(fetchReplay).toHaveBeenCalledTimes(2);
   });
 
-  it("downloads only a validated HTTPS replay data URL and explains the format", async () => {
-    const fetchReplay = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          status: "ready",
-          replayUrl: "https://replay.example.test/session?token=temporary",
-        }),
-        { status: 200 },
-      ),
-    );
+  it("loads replay events only after the user asks to watch", async () => {
+    const events = [
+      { type: 4, timestamp: 1_000, data: { href: "https://example.com/" } },
+      { type: 2, timestamp: 1_001, data: { node: { type: 0, childNodes: [] } } },
+    ];
+    const fetchReplay = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "ready" }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "ready", events }), { status: 200 }),
+      );
     vi.stubGlobal("fetch", fetchReplay);
 
-    render(
-      <StrictMode>
-        <ReplayLink correlation={correlation} />
-      </StrictMode>,
-    );
+    render(<ReplayLink correlation={correlation} />);
 
-    const link = await screen.findByRole("link", { name: "Download replay data" });
+    const watch = await screen.findByRole("button", { name: "Watch replay" });
     expect(fetchReplay).toHaveBeenCalledTimes(1);
-    expect(link).toHaveAttribute("download");
-    expect(link).not.toHaveAttribute("target");
-    expect(link).toHaveAttribute(
-      "href",
-      "https://replay.example.test/session?token=temporary",
+    fireEvent.click(watch);
+
+    expect(await screen.findByRole("dialog", { name: "Session replay" })).toBeVisible();
+    await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(2));
+    expect(fetchReplay).toHaveBeenLastCalledWith(
+      "/api/replays/sol_dab46ee6c619545d0534?runId=llr_123e4567-e89b-42d3-a456-426614174000&country=us&attempt=1&mode=events",
+      expect.objectContaining({
+        headers: { "x-localelens-request": "1" },
+        signal: expect.any(AbortSignal),
+      }),
     );
-    expect(
-      screen.getByText("Compressed developer event data, not a video."),
-    ).toBeVisible();
+    expect(await screen.findByText("Replay ready")).toBeVisible();
   });
 
-  it("fails closed for unsafe replay JSON without displaying a URL", async () => {
+  it("fails closed for replay JSON that exposes a provider URL", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         new Response(
-          JSON.stringify({ status: "ready", replayUrl: "http://replay.example.test/" }),
+          JSON.stringify({ status: "ready", replayUrl: "https://replay.example.test/" }),
           { status: 200 },
         ),
       ),
@@ -142,24 +153,7 @@ describe("ReplayLink", () => {
     );
 
     expect(await screen.findByText("Replay unavailable")).toBeVisible();
-    expect(screen.queryByRole("link", { name: /replay/i })).not.toBeInTheDocument();
-  });
-
-  it.each([
-    "https://user:pass@replay.example.test/",
-    "https://replay.example.test:444/",
-    "https://replay.example.test/#fragment",
-  ])("rejects an unsafe HTTPS replay URL", async (replayUrl) => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ status: "ready", replayUrl }), { status: 200 }),
-      ),
-    );
-
-    render(<ReplayLink correlation={correlation} />);
-
-    expect(await screen.findByText("Replay unavailable")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Watch replay" })).not.toBeInTheDocument();
   });
 
   it("aborts an unresolved lookup when unmounted", async () => {
@@ -175,5 +169,39 @@ describe("ReplayLink", () => {
     unmount();
 
     expect(requestSignal?.aborted).toBe(true);
+  });
+
+  it("aborts an unresolved replay load when the capture correlation changes", async () => {
+    let replaySignal: AbortSignal | undefined;
+    const fetchReplay = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "ready" }), { status: 200 }),
+      )
+      .mockImplementationOnce((_url: string, init?: RequestInit) => {
+        replaySignal = init?.signal ?? undefined;
+        return new Promise<Response>(() => undefined);
+      })
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "pending" }), { status: 202 }),
+      );
+    vi.stubGlobal("fetch", fetchReplay);
+
+    const { rerender } = render(<ReplayLink correlation={correlation} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Watch replay" }));
+    await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(2));
+
+    rerender(
+      <ReplayLink
+        correlation={{
+          ...correlation,
+          country: "de",
+          sessionRef: "sol_1234567890abcdef1234",
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(replaySignal?.aborted).toBe(true));
+    expect(screen.queryByRole("dialog", { name: "Session replay" })).not.toBeInTheDocument();
   });
 });
