@@ -1,5 +1,14 @@
+"use client";
+
 import Image from "next/image";
-import { CircleDashed, RotateCcw, TriangleAlert } from "lucide-react";
+import {
+  CircleDashed,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+  TriangleAlert,
+} from "lucide-react";
+import { useState } from "react";
 
 import type {
   CaptureCorrelation,
@@ -52,6 +61,7 @@ type RegionResultProps = {
 
 export function RegionResult({ region, onRetry }: RegionResultProps) {
   const countryName = COUNTRY_NAMES[region.country];
+  const [expanded, setExpanded] = useState(false);
 
   if (!region.response) {
     return (
@@ -123,13 +133,33 @@ export function RegionResult({ region, onRetry }: RegionResultProps) {
   return (
     <article
       aria-label={`${countryName} regional evidence`}
-      className="region-preview"
+      className={`region-preview${expanded ? " region-preview-expanded" : ""}`}
     >
       <header>
         <strong>{region.country.toUpperCase()}</strong>
         <span>{countryName}</span>
       </header>
       <p className="capture-provenance">Live evidence</p>
+      <div className="screenshot-toolbar">
+        <button
+          aria-expanded={expanded}
+          aria-label={
+            expanded
+              ? `Return ${countryName} screenshot to grid`
+              : `View larger screenshot for ${countryName}`
+          }
+          className="screenshot-expand"
+          onClick={() => setExpanded((value) => !value)}
+          type="button"
+        >
+          {expanded ? (
+            <Minimize2 aria-hidden="true" size={16} />
+          ) : (
+            <Maximize2 aria-hidden="true" size={16} />
+          )}
+          {expanded ? "Return to grid" : "View larger"}
+        </button>
+      </div>
       <Image
         alt={`${countryName} evidence for ${host}, captured ${capturedAt}`}
         height={900}

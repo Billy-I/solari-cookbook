@@ -27,6 +27,42 @@ describe("RegionResult", () => {
     expect(screen.getByText("Live evidence")).toBeVisible();
   });
 
+  it("lets the user expand and collapse a regional screenshot inline", () => {
+    const region: RegionRunState = {
+      country: "us",
+      stage: "complete",
+      response: sampleCaptureByCountry.us,
+    };
+
+    render(<RegionResult onRetry={vi.fn()} region={region} />);
+
+    const article = screen.getByRole("article", {
+      name: "United States regional evidence",
+    });
+    const expand = screen.getByRole("button", {
+      name: "View larger screenshot for United States",
+    });
+
+    expect(expand).toHaveAttribute("aria-expanded", "false");
+    expect(article).not.toHaveClass("region-preview-expanded");
+
+    fireEvent.click(expand);
+
+    expect(
+      screen.getByRole("button", {
+        name: "Return United States screenshot to grid",
+      }),
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(article).toHaveClass("region-preview-expanded");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Return United States screenshot to grid",
+      }),
+    );
+    expect(article).not.toHaveClass("region-preview-expanded");
+  });
+
   it("uses bounded live screenshot bytes rather than a featured sample", () => {
     const region: RegionRunState = {
       country: "us",

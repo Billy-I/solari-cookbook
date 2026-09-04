@@ -1,5 +1,6 @@
 "use client";
 
+import { LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -137,6 +138,7 @@ export function AuditForm({
       </fieldset>
 
       <button
+        aria-busy={busy || undefined}
         aria-describedby="solari-connection-guidance"
         aria-disabled={busy || !connectionReady || undefined}
         aria-label="Compare live through Solari"
@@ -144,7 +146,14 @@ export function AuditForm({
         disabled={!connectionReady}
         type="submit"
       >
-        {busy ? "Comparing live…" : "Compare live through Solari"}
+        {busy ? (
+          <>
+            <LoaderCircle aria-hidden="true" className="status-spinner" size={17} />
+            Comparing live…
+          </>
+        ) : (
+          "Compare live through Solari"
+        )}
       </button>
 
       {error ? (

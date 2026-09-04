@@ -127,6 +127,11 @@ describe("AuditForm", () => {
       "aria-disabled",
       "true",
     );
+    expect(screen.getByRole("button", { name: "Compare live through Solari" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.getByText("Comparing live…")).toBeVisible();
     expect(screen.getByRole("button", { name: "Compare live through Solari" })).not.toBeDisabled();
   });
 

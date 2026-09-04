@@ -67,11 +67,11 @@ describe("ReplayLink", () => {
 
     render(<ReplayLink correlation={correlation} />);
 
-    const recheck = await screen.findByRole("button", { name: "Re-check replay" });
+    const recheck = await screen.findByRole("button", { name: "Check replay availability" });
     expect(screen.queryByRole("link", { name: /replay/i })).not.toBeInTheDocument();
     fireEvent.click(recheck);
 
-    expect(await screen.findByRole("link", { name: "Open replay" })).toBeVisible();
+    expect(await screen.findByRole("link", { name: "Download replay data" })).toBeVisible();
     expect(fetchReplay).toHaveBeenCalledTimes(2);
   });
 
@@ -88,12 +88,12 @@ describe("ReplayLink", () => {
 
     render(<ReplayLink correlation={correlation} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Re-check replay" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Check replay availability" }));
     expect(await screen.findByText("Replay unavailable")).toBeVisible();
     expect(fetchReplay).toHaveBeenCalledTimes(2);
   });
 
-  it("opens only a validated server HTTPS replay URL safely", async () => {
+  it("downloads only a validated HTTPS replay data URL and explains the format", async () => {
     const fetchReplay = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -111,14 +111,17 @@ describe("ReplayLink", () => {
       </StrictMode>,
     );
 
-    const link = await screen.findByRole("link", { name: "Open replay" });
+    const link = await screen.findByRole("link", { name: "Download replay data" });
     expect(fetchReplay).toHaveBeenCalledTimes(1);
-    expect(link).toHaveAttribute("target", "_blank");
-    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(link).toHaveAttribute("download");
+    expect(link).not.toHaveAttribute("target");
     expect(link).toHaveAttribute(
       "href",
       "https://replay.example.test/session?token=temporary",
     );
+    expect(
+      screen.getByText("Compressed developer event data, not a video."),
+    ).toBeVisible();
   });
 
   it("fails closed for unsafe replay JSON without displaying a URL", async () => {

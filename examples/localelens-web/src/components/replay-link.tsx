@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, LoaderCircle, RotateCcw, Unlink } from "lucide-react";
+import { Download, LoaderCircle, RotateCcw, Unlink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type { CaptureCorrelation } from "@/src/features/capture/contracts";
@@ -146,37 +146,41 @@ export function ReplayLink({ correlation }: ReplayLinkProps) {
 
   if (result.status === "ready") {
     return (
-      <a
-        className="replay-link"
-        href={result.replayUrl}
-        rel="noopener noreferrer"
-        target="_blank"
-      >
-        <ExternalLink aria-hidden="true" size={16} />
-        Open replay
-      </a>
+      <div className="replay-block">
+        <a className="replay-link" download href={result.replayUrl}>
+          <Download aria-hidden="true" size={16} />
+          Download replay data
+        </a>
+        <p className="replay-help">Compressed developer event data, not a video.</p>
+      </div>
     );
   }
 
   if (result.status === "pending") {
     return (
-      <div className="replay-pending">
-        <span className="replay-state">
-          <LoaderCircle aria-hidden="true" size={16} />
-          Replay pending
-        </span>
-        <button className="secondary-action" onClick={recheck} type="button">
-          <RotateCcw aria-hidden="true" size={16} />
-          Re-check replay
-        </button>
+      <div className="replay-block">
+        <div className="replay-pending">
+          <span className="replay-state">
+            <LoaderCircle aria-hidden="true" className="status-spinner" size={16} />
+            Replay pending
+          </span>
+          <button className="secondary-action" onClick={recheck} type="button">
+            <RotateCcw aria-hidden="true" size={16} />
+            Check replay availability
+          </button>
+        </div>
+        <p className="replay-help">Compressed developer event data, not a video.</p>
       </div>
     );
   }
 
   return (
-    <span className="replay-state">
-      <Unlink aria-hidden="true" size={16} />
-      Replay unavailable
-    </span>
+    <div className="replay-block">
+      <span className="replay-state">
+        <Unlink aria-hidden="true" size={16} />
+        Replay unavailable
+      </span>
+      <p className="replay-help">Compressed developer event data, not a video.</p>
+    </div>
   );
 }

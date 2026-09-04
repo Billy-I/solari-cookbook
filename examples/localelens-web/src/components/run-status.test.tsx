@@ -72,6 +72,11 @@ describe("RunStatus", () => {
       />,
     );
 
-    expect(screen.getByText("2 of 5 settled · Batch 1 of 2")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Comparing 5 markets" })).toBeVisible();
+    expect(screen.getByText("2 of 5 captures finished · Batch 1 of 2")).toBeVisible();
+    expect(screen.getByRole("progressbar", { name: "Comparison progress" })).toHaveAttribute(
+      "aria-valuenow",
+      "2",
+    );
   });
 });
