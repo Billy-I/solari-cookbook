@@ -62,6 +62,13 @@ test("desktop connection and comparison are explicit, live-only, and retry-safe"
   await expect(page.getByText("Replay ready")).toBeVisible();
   await expect(page.locator(".rr-controller")).toBeVisible();
   expect(testDouble.replayCalls.filter((call) => call === "events")).toHaveLength(1);
+  await page.getByText("Developer data", { exact: true }).click();
+  const replayDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download NDJSON" }).click();
+  await expect((await replayDownload).suggestedFilename()).toBe(
+    "sol_0123456789abcdef0123.ndjson",
+  );
+  expect(testDouble.replayCalls.filter((call) => call === "events")).toHaveLength(1);
   await page.getByRole("button", { name: "Close replay" }).click();
   await expect(page.getByRole("dialog", { name: "Session replay" })).toHaveCount(0);
 
