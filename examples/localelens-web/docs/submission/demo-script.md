@@ -1,27 +1,49 @@
-# LocaleLens 75-second demo
+# LocaleLens optional 75-second walkthrough
 
-Use deterministic **sample-mode** footage for this recording. It does not require a provider call, and the on-screen data is explicitly sample data. Any live-provider evidence mentioned below is prior qualified evidence only; it is not shown or required as live footage.
+This is a script, not a claim that a finished video exists. The recovered hiring
+instructions require a public fork, a real Solari use case, and a tagged social
+post; they do not explicitly require a hosted demo or video. The current app is
+live-only. Do not use the archived sample screenshots as current live evidence.
+
+If recording a new live run, connect privately before recording. State and
+approve the exact public URL, markets, and initial capture count before the
+compare action; every additional capture retry needs its own spend approval.
+Never record key entry, account pages, developer tools, or other private content.
 
 ## 0–10 seconds — The problem and one URL
 
-Show the LocaleLens comparison form. Say: “A page can present differently by market, but a VPN location alone is not dependable evidence. LocaleLens starts with one public HTTPS URL: `https://regional.example.test/pricing`.”
+Show the comparison form. Say: “LocaleLens helps product and QA teams compare
+what customers see on the same public webpage in different markets.”
 
 ## 10–25 seconds — Select the markets
 
-Show the market controls and select United States, United Kingdom, and Germany. Say: “I’m comparing the same page for the US, UK, and Germany. LocaleLens keeps these markets separate so the result is evidence per market, not one blended answer.”
+Show the approved public URL and exact selected markets. Say: “Each market
+uses one Solari regional browser capture, paid from my own account. The app
+processes up to three at a time.” Do not click Compare until the selection
+matches the approved count.
 
 ## 25–45 seconds — Independent statuses and screenshots
 
-Run the deterministic sample comparison and show the receipt/status strip, followed by the US, GB, and DE columns. Say: “Each market has its own completion status and screenshot. Here the three sample columns preserve the regional render independently, including the localized pricing presentation.”
+Show progress, then expand the actual completed country screenshots. Say:
+“Each market has its own status. I can inspect a larger screenshot and keep
+successful evidence even when a different market fails.” If the run takes
+longer, label any edit that skips waiting. Never replace a failure with fabricated success.
 
 ## 45–60 seconds — Evidence differences and Solari receipt/replay
 
-Show the regional evidence area and the receipt/replay controls or sample result details. Say: “The difference is tied back to its evidence. In qualified live work, Solari opens regional browsers through proxies, validates country receipts, and supports explicit replay lookup. This demo remains in deterministic sample mode.”
+Show **What changed** and **Detailed field comparison**. Describe only observed
+values. Say: “These signals compare the captured language, pricing clues,
+redirects, and consent text. Matching results are valid too. Technical details
+can optionally show the page-load recording; it is not an interactive browsing session.”
 
 ## 60–70 seconds — Export and evidence label
 
-Show JSON export and print output. Say: “Export stays bounded and labeled: JSON or print, sample evidence—not provider footage.”
+Show JSON export and the print entry point. Say: “The report keeps the source,
+market, capture time, and any failures reviewable.”
 
 ## 70–75 seconds — Repository and honest limitation
 
-Show the local repository reference. Say: “This local sample demo is deterministic; public links and hosted behavior require separate approval.”
+Show the public repository URL. Say: “The code and setup instructions are in
+my Solari cookbook fork. You can run it locally with your own key.” Disconnect
+and stop the server after the recording. Review all frames for private data
+before attaching footage to a post.

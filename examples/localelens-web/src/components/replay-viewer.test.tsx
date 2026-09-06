@@ -38,9 +38,13 @@ describe("ReplayViewer", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog", { name: "Session replay" })).toBeVisible();
-    expect(screen.getByText("Loading visual replay")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Close replay" }));
+    expect(
+      screen.getByRole("dialog", { name: "Page-load recording" }),
+    ).toBeVisible();
+    expect(screen.getByText("Loading page-load recording")).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close page-load recording" }),
+    );
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -55,7 +59,7 @@ describe("ReplayViewer", () => {
       />,
     );
 
-    expect(screen.getByText("Replay ready")).toBeVisible();
+    expect(screen.getByText("Recording ready")).toBeVisible();
     expect(makePlayer).toHaveBeenCalledWith(
       expect.objectContaining({
         props: expect.objectContaining({ autoPlay: false, events, showController: true }),
@@ -78,7 +82,9 @@ describe("ReplayViewer", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Try loading replay again" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Try loading recording again" }),
+    );
     expect(onRetry).toHaveBeenCalledOnce();
   });
 });

@@ -62,6 +62,7 @@ type RegionResultProps = {
 export function RegionResult({ region, onRetry }: RegionResultProps) {
   const countryName = COUNTRY_NAMES[region.country];
   const [expanded, setExpanded] = useState(false);
+  const [technicalDetailsOpen, setTechnicalDetailsOpen] = useState(false);
 
   if (!region.response) {
     return (
@@ -195,10 +196,24 @@ export function RegionResult({ region, onRetry }: RegionResultProps) {
       </dl>
       <p className="capture-time">Captured {capturedAt}</p>
       {correlation ? (
-        <>
-          <p className="session-reference">{correlation.sessionRef}</p>
-          <ReplayLink correlation={correlation} />
-        </>
+        <details
+          className="technical-details"
+          onToggle={(event) => setTechnicalDetailsOpen(event.currentTarget.open)}
+        >
+          <summary>Technical details</summary>
+          {technicalDetailsOpen ? (
+            <div className="technical-details-content">
+              <p className="technical-details-note">
+                The page-load recording can reveal delayed content, redirects,
+                or popups. It does not click, scroll, or navigate.
+              </p>
+              <p className="session-reference">
+                Solari reference <code>{correlation.sessionRef}</code>
+              </p>
+              <ReplayLink correlation={correlation} />
+            </div>
+          ) : null}
+        </details>
       ) : null}
     </article>
   );

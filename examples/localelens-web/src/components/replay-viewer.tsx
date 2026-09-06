@@ -86,11 +86,11 @@ export function ReplayViewer({
       >
         <header className="replay-viewer-header">
           <div>
-            <p className="replay-viewer-kicker">Recorded browser session</p>
-            <h2 id="replay-viewer-title">Session replay</h2>
+            <p className="replay-viewer-kicker">Recorded page load</p>
+            <h2 id="replay-viewer-title">Page-load recording</h2>
           </div>
           <button
-            aria-label="Close replay"
+            aria-label="Close page-load recording"
             className="replay-close"
             onClick={onClose}
             ref={closeButtonRef}
@@ -103,24 +103,24 @@ export function ReplayViewer({
         <div className="replay-viewer-stage">
           {events ? (
             <>
-              <p className="replay-ready-label">Replay ready</p>
+              <p className="replay-ready-label">Recording ready</p>
               <div className="replay-player-target" ref={playerTargetRef} />
             </>
           ) : failed ? (
             <div className="replay-viewer-message" role="alert">
               <AlertCircle aria-hidden="true" size={22} />
-              <h3>Replay could not be loaded</h3>
+              <h3>Recording could not be loaded</h3>
               <p>The recording was unavailable or did not pass validation.</p>
               <button className="secondary-action" onClick={onRetry} type="button">
                 <RotateCcw aria-hidden="true" size={16} />
-                Try loading replay again
+                Try loading recording again
               </button>
             </div>
           ) : (
             <div className="replay-viewer-message" role="status">
               <LoaderCircle aria-hidden="true" className="status-spinner" size={22} />
-              <h3>Loading visual replay</h3>
-              <p>Retrieving the bounded recording for this session.</p>
+              <h3>Loading page-load recording</h3>
+              <p>Retrieving the bounded recording for this page load.</p>
             </div>
           )}
         </div>

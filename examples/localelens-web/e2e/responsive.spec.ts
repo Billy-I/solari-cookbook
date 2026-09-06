@@ -34,15 +34,18 @@ test("360 CSS pixel live-only journey reflows without hidden evidence", async ({
   await expect(page.getByRole("heading", { name: "What changed" })).toBeVisible();
   await page.getByText("Screenshots and regional evidence").click();
   await expect(page.getByRole("article", { name: /regional evidence/ })).toHaveCount(3);
-  await page.getByRole("button", { name: "Watch replay" }).first().click();
-  await expect(page.getByRole("dialog", { name: "Session replay" })).toBeVisible();
+  await page.getByText("Technical details", { exact: true }).first().click();
+  await page.getByRole("button", { name: "View page-load recording" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Page-load recording" }),
+  ).toBeVisible();
   await expect(page.locator(".replay-viewer-stage")).toBeVisible();
   expect(
     await page.locator("html").evaluate(
       (element) => element.scrollWidth <= element.clientWidth,
     ),
   ).toBe(true);
-  await page.getByRole("button", { name: "Close replay" }).click();
+  await page.getByRole("button", { name: "Close page-load recording" }).click();
   await page.getByText("Detailed field comparison").click();
   await expect(
     page.getByLabel("Captured field differences by market, compact view"),

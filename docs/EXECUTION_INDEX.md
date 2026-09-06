@@ -1,6 +1,12 @@
 # LocaleLens Execution Index
 
-Status: Live Product Readiness implemented; non-live gate PASS; live UI-only proof NOT RUN
+Status: live-only user-owned-key implementation and owner-accepted live evidence
+are on `main`; current submission status and checks are in the
+[reviewer handoff](../examples/localelens-web/docs/submission/reviewer-handoff.md).
+
+The phase map and control record below preserve historical checkpoints. Their
+sample-mode and authorization statements describe those checkpoints, not the
+current runtime or the owner's later publication approvals.
 
 Owner: Billy Tompazis
 
@@ -51,6 +57,10 @@ LocaleLens is a responsive web application that compares one public HTTPS page a
 
 ### Successor product-readiness design and evidence
 
+- [`superpowers/specs/2026-09-03-localelens-user-owned-solari-keys-live-only-design.md`](superpowers/specs/2026-09-03-localelens-user-owned-solari-keys-live-only-design.md) — current credential and live-only design.
+- [`superpowers/plans/2026-09-03-localelens-user-owned-solari-keys-live-only.md`](superpowers/plans/2026-09-03-localelens-user-owned-solari-keys-live-only.md) — implemented successor plan.
+- [`../examples/localelens-web/docs/evidence/byok-live-only.md`](../examples/localelens-web/docs/evidence/byok-live-only.md) — qualified live acceptance and cleanup evidence.
+- [`../examples/localelens-web/docs/evidence/submission-handoff-2026-09-06.md`](../examples/localelens-web/docs/evidence/submission-handoff-2026-09-06.md) — current submission verification.
 - [`superpowers/specs/2026-09-03-localelens-live-product-readiness-design.md`](superpowers/specs/2026-09-03-localelens-live-product-readiness-design.md)
 - [`../examples/localelens-web/docs/evidence/live-product-readiness/README.md`](../examples/localelens-web/docs/evidence/live-product-readiness/README.md)
 - [`../examples/localelens-web/docs/evidence/live-product-readiness/manual-acceptance.md`](../examples/localelens-web/docs/evidence/live-product-readiness/manual-acceptance.md)
@@ -64,15 +74,17 @@ LocaleLens is a responsive web application that compares one public HTTPS page a
 
 ```mermaid
 flowchart LR
-  U[Reviewer browser] -->|sample mode| F[Deterministic fixtures]
-  U -->|owner-controlled live mode| R[POST one country]
+  U[Reviewer browser] -->|masked key entry| K[Bounded server-memory credential session]
+  K -->|opaque HttpOnly cookie| U
+  U -->|one POST per country| R[Capture route]
+  K --> R
   R --> V[HTTPS and network validation]
   V --> S[Solari recorded regional browser]
   S --> E[Bounded screenshot and evidence]
   E --> U
   U --> D[Pure deterministic comparison]
   D --> X[JSON and print export]
-  S -. session id .-> P[Replay lookup]
+  U -->|optional Technical details| P[Owner-bound recording lookup]
 ```
 
 There is no database, account system, background worker, queue, WebSocket, LLM, analytics pipeline, or server-side batch job in the MVP.
@@ -106,7 +118,10 @@ Unavailable evidence is written as `NOT PROVEN`, never converted to PASS by docu
 
 ## Dependency policy
 
-Runtime dependencies are limited to Next.js, React, React DOM, Tailwind CSS, Lucide React, Zod, and the official Solari browser SDK. Vitest, Testing Library, Playwright, and axe support verification. Every later dependency requires a demonstrated need, lockfile review, and explicit documentation.
+Runtime dependencies are Next.js, React, React DOM, Lucide React, Zod, the
+official Solari browser SDK, and rrweb-player for the optional recording viewer.
+Tailwind CSS, Vitest, Testing Library, Playwright, and axe support styling and
+verification. Later dependencies require a demonstrated need and lockfile review.
 
 ## Working rules
 
@@ -119,7 +134,7 @@ Runtime dependencies are limited to Next.js, React, React DOM, Tailwind CSS, Luc
 7. Never begin the successor phase implicitly.
 8. Push, deployment, and social posting require separate owner authorization.
 
-## Current next gate
+## Historical Live Product Readiness stop
 
 Live Product Readiness is implemented locally on
 `codex/localelens-live-product-readiness`, created directly from the published
@@ -129,3 +144,7 @@ Solari and dashboard proof is `NOT RUN` because no runtime key was available;
 therefore live-provider and release readiness remain unproved. Push,
 deployment, publication, submission, posting, pull request, merge, and release
 remain unauthorized.
+
+That stop was superseded by the user-owned-key implementation and later owner
+acceptance/publication. Current setup and submission status are linked at the
+top; historical evidence is retained without changing its original verdicts.

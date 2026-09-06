@@ -54,12 +54,22 @@ test("desktop connection and comparison are explicit, live-only, and retry-safe"
   await expect(page.getByText("Live evidence")).toHaveCount(2);
   await expect(page.getByText("CAPTURE_FAILED", { exact: true })).toBeVisible();
   await expect(page.getByText("Partial report: 2 of 3 captures succeeded.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Watch replay" })).toHaveCount(2);
-  expect(testDouble.replayCalls.filter((call) => call === "events")).toHaveLength(0);
+  await expect(
+    page.getByRole("button", { name: "View page-load recording" }),
+  ).toHaveCount(0);
+  expect(testDouble.replayCalls).toHaveLength(0);
 
-  await page.getByRole("button", { name: "Watch replay" }).first().click();
-  await expect(page.getByRole("dialog", { name: "Session replay" })).toBeVisible();
-  await expect(page.getByText("Replay ready")).toBeVisible();
+  await page.getByText("Technical details", { exact: true }).first().click();
+  const recording = page.getByRole("button", {
+    name: "View page-load recording",
+  });
+  await expect(recording).toBeVisible();
+  expect(testDouble.replayCalls).toEqual(["status"]);
+  await recording.click();
+  await expect(
+    page.getByRole("dialog", { name: "Page-load recording" }),
+  ).toBeVisible();
+  await expect(page.getByText("Recording ready")).toBeVisible();
   await expect(page.locator(".rr-controller")).toBeVisible();
   expect(testDouble.replayCalls.filter((call) => call === "events")).toHaveLength(1);
   await page.getByText("Developer data", { exact: true }).click();
@@ -69,8 +79,12 @@ test("desktop connection and comparison are explicit, live-only, and retry-safe"
     "sol_0123456789abcdef0123.ndjson",
   );
   expect(testDouble.replayCalls.filter((call) => call === "events")).toHaveLength(1);
-  await page.getByRole("button", { name: "Close replay" }).click();
-  await expect(page.getByRole("dialog", { name: "Session replay" })).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Close page-load recording" })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Page-load recording" }),
+  ).toHaveCount(0);
 
   const partialDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download JSON" }).click();

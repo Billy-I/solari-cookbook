@@ -1,9 +1,13 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RegionResult } from "@/src/components/region-result";
 import type { RegionRunState } from "@/src/features/run/use-comparison-run";
 import { sampleCaptureByCountry } from "@/src/test/fixtures";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("RegionResult", () => {
   it("describes the screenshot with country, host, and timestamp", () => {
@@ -87,7 +91,41 @@ describe("RegionResult", () => {
       "data:image/jpeg;base64,bGl2ZS1qcGVn",
     );
     expect(screen.getByText("Live evidence")).toBeVisible();
-    expect(screen.getByText("sol_dab46ee6c619545d0534")).toBeVisible();
+  });
+
+  it("keeps the page-load recording and session reference behind technical details", async () => {
+    const sessionRef = "sol_dab46ee6c619545d0534";
+    const fetchReplay = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "pending" }), { status: 202 }),
+    );
+    vi.stubGlobal("fetch", fetchReplay);
+    const region: RegionRunState = {
+      country: "us",
+      stage: "complete",
+      response: {
+        ...sampleCaptureByCountry.us,
+        receipt: {
+          ...sampleCaptureByCountry.us.receipt,
+          sessionRef,
+        },
+      },
+    };
+
+    render(<RegionResult onRetry={vi.fn()} region={region} />);
+
+    const summary = screen.getByText("Technical details", {
+      selector: "summary",
+    });
+    expect(summary).toBeVisible();
+    expect(screen.queryByText(sessionRef)).not.toBeInTheDocument();
+    expect(screen.queryByText("Checking recording")).not.toBeInTheDocument();
+    expect(fetchReplay).not.toHaveBeenCalled();
+
+    fireEvent.click(summary);
+
+    expect(await screen.findByText(sessionRef)).toBeVisible();
+    expect(await screen.findByText("Recording pending")).toBeVisible();
+    await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(1));
   });
 
   it("renders null consent as not detected", () => {

@@ -1,3 +1,25 @@
 # LocaleLens project summary
 
-LocaleLens helps product designers, growth teams, localization leads, and QA engineers compare one public HTTPS page across selected markets. Instead of treating a VPN location as proof, it uses Solari to open regional browsers through proxies, validate country receipts, collect bounded screenshots and page facts, and support explicit replay lookup. The Next.js application keeps the provider key server-side, validates public targets before launch and navigation, limits evidence size and duration, closes clients in finally paths, and presents partial results honestly. Deterministic sample mode exercises the comparison, export, print, and responsive journey without provider calls. The accepted Phase 4 gate passed 234 tests, typecheck, lint, sample build, a 180 KiB gzip budget, and 11 sample Playwright tests with zero capture or replay requests. A qualified live run used four captures and six replay lookups. Hosted behavior, direct assistive-technology observation, some Browser states, raw provider data, and provider-console cleanup remain NOT PROVEN.
+LocaleLens helps product designers, localization teams, and QA engineers inspect
+how one public HTTPS page appears across markets. It uses Solari browser sessions
+and country proxies to collect screenshots, final URLs, language, pricing clues,
+headings, calls to action, and consent text. The interface shows regional progress,
+expandable screenshots, field differences, and JSON/print exports. Optional
+page-load recordings sit behind Technical details.
+
+Built with Next.js, React, and TypeScript, it runs 2–15 selected markets in
+deterministic batches of at most three. Each user enters their own key through
+a masked form; credentials stay in bounded server memory behind an opaque
+HttpOnly cookie. Public-target validation, bounded extraction, cleanup, and
+explicit retries keep the workflow controlled. There is no LLM, database,
+account system, or shipped sample mode.
+
+The owner-accepted live follow-up captured eight markets successfully. Its
+dashboard correlation and broader provider reliability remain unproven.
+The supported runtime is one long-lived local Node process; hosted and
+multi-instance operation are not claimed.
+
+Source and setup: [LocaleLens on GitHub](https://github.com/Billy-I/solari-cookbook/tree/main/examples/localelens-web).
+See [current verification](../evidence/submission-handoff-2026-09-06.md) for
+automated results and the [live report](../evidence/byok-live-only.md) for
+the exact acceptance qualifications.

@@ -23,7 +23,11 @@ past. Copy one into your project and change the parts you care about.
 
 | Example | Language | What it shows |
 | --- | --- | --- |
-| [localelens-web](examples/localelens-web) | TypeScript / Next.js | Bounded regional web-experience comparison with sample mode and local-only live evidence |
+| [localelens-web](examples/localelens-web) | TypeScript / Next.js | Live regional screenshots and evidence comparison using each user's own Solari key |
+
+For LocaleLens, use its [local setup and reviewer guide](examples/localelens-web/README.md).
+It accepts a key only through its masked UI; the environment-key instructions
+below apply to the other cookbook examples.
 
 ### Sandbox
 

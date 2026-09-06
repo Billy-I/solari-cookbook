@@ -1,13 +1,38 @@
-# LocaleLens social post draft
+# LocaleLens application post
 
-LocaleLens makes it easier to compare what one public HTTPS page actually renders across markets—without treating a VPN location as proof.
+Ready-to-copy draft; not posted by the build agent. Use the short version on X
+or the longer version on LinkedIn. On LinkedIn, select the actual Harry Chow
+and Solari profiles when adding mentions.
 
-I shipped a focused workflow for comparing regional screenshots and bounded evidence side by side, with clear sample/live labeling, JSON export, and print output. Solari is the right fit because it provides regional browser sessions, country receipts, and explicit replay lookup for qualified live evidence.
+## X
 
-Repository: [REPOSITORY_URL — pending owner-approved public push]
+I built LocaleLens with AI: compare regional screenshots and page evidence using
+Solari browsers. Live data, your own key, expandable screenshots, JSON reports.
 
-Demo: [DEMO_URL — pending owner-approved deployment]
+https://github.com/Billy-I/solari-cookbook/tree/main/examples/localelens-web
 
 @harrychow_ @getsolari
 
-Draft only. Do not publish until the owner approves public URLs and posting.
+## LinkedIn
+
+What do customers in different markets actually see on the same webpage?
+
+I built LocaleLens for the Solari challenge: a web app that compares live
+regional screenshots, language, pricing clues, redirects, calls to action,
+and consent text using Solari browsers and country proxies.
+
+The design keeps evidence easy to inspect: per-market progress, expandable
+screenshots, field comparisons, and JSON/print exports. Successful captures
+stay visible when another market fails. Optional recordings show the page load.
+
+I used AI-assisted development and focused on clear UX, a small understandable
+architecture, and verifiable behavior. Each user brings their own Solari key;
+the app keeps it temporarily in server memory and never retries captures
+automatically. There is no sample fallback or extra model provider.
+
+The public cookbook fork includes local setup, tests, architecture, and qualified
+live evidence. It runs locally on one Node process with your own Solari account.
+
+https://github.com/Billy-I/solari-cookbook/tree/main/examples/localelens-web
+
+@harrychow_ @getsolari

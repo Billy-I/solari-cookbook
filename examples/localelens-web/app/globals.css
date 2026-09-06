@@ -721,6 +721,38 @@ select {
   margin: 12px 0 0;
 }
 
+.technical-details {
+  border-top: 1px solid var(--rule);
+  margin-top: 14px;
+}
+
+.technical-details summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 14px 0 10px;
+}
+
+.technical-details-content {
+  padding-bottom: 2px;
+}
+
+.technical-details-note {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.technical-details .session-reference {
+  margin: 10px 0 0;
+}
+
+.technical-details .session-reference code {
+  overflow-wrap: anywhere;
+}
+
 .region-failure {
   min-height: 320px;
 }

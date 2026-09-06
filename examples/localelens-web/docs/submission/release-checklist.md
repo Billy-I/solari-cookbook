@@ -1,5 +1,12 @@
 # LocaleLens release checklist
 
+> Historical Phase 5 sample-mode freeze. Preserved as recorded; do not use its
+> commands, pending approvals, or asset paths as current setup or release status.
+> See [current reviewer handoff](reviewer-handoff.md) and
+> [2026-09-06 verification](../evidence/submission-handoff-2026-09-06.md).
+> The former `public/social-card.png` is archived without content changes at
+> [phase-5-social-card.png](../evidence/phase-5-social-card.png).
+
 ## Decision
 
 - Local release-candidate freeze: **DONE WITH CONCERNS**.

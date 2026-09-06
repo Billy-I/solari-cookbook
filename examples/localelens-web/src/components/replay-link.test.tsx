@@ -33,7 +33,7 @@ describe("ReplayLink", () => {
       </StrictMode>,
     );
 
-    expect(screen.getByText("Checking replay")).toBeVisible();
+    expect(screen.getByText("Checking recording")).toBeVisible();
     expect(screen.queryByRole("link", { name: /replay/i })).not.toBeInTheDocument();
     rerender(
       <StrictMode>
@@ -42,7 +42,7 @@ describe("ReplayLink", () => {
     );
 
     await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("Replay pending")).toBeVisible();
+    expect(await screen.findByText("Recording pending")).toBeVisible();
     expect(fetchReplay).toHaveBeenCalledWith(
       "/api/replays/sol_dab46ee6c619545d0534?runId=llr_123e4567-e89b-42d3-a456-426614174000&country=us&attempt=1",
       expect.objectContaining({
@@ -73,12 +73,18 @@ describe("ReplayLink", () => {
 
     render(<ReplayLink correlation={correlation} />);
 
-    const recheck = await screen.findByRole("button", { name: "Check replay availability" });
+    const recheck = await screen.findByRole("button", {
+      name: "Check recording availability",
+    });
     expect(screen.queryByRole("link", { name: /replay/i })).not.toBeInTheDocument();
     await waitFor(() => expect(recheck).toBeEnabled());
     fireEvent.click(recheck);
 
-    expect(await screen.findByRole("button", { name: "Watch replay" })).toBeVisible();
+    expect(
+      await screen.findByRole("button", {
+        name: "View page-load recording",
+      }),
+    ).toBeVisible();
     expect(fetchReplay).toHaveBeenCalledTimes(2);
   });
 
@@ -95,10 +101,12 @@ describe("ReplayLink", () => {
 
     render(<ReplayLink correlation={correlation} />);
 
-    const recheck = await screen.findByRole("button", { name: "Check replay availability" });
+    const recheck = await screen.findByRole("button", {
+      name: "Check recording availability",
+    });
     await waitFor(() => expect(recheck).toBeEnabled());
     fireEvent.click(recheck);
-    expect(await screen.findByText("Replay unavailable")).toBeVisible();
+    expect(await screen.findByText("Recording unavailable")).toBeVisible();
     expect(fetchReplay).toHaveBeenCalledTimes(2);
   });
 
@@ -119,11 +127,15 @@ describe("ReplayLink", () => {
 
     render(<ReplayLink correlation={correlation} />);
 
-    const watch = await screen.findByRole("button", { name: "Watch replay" });
+    const watch = await screen.findByRole("button", {
+      name: "View page-load recording",
+    });
     expect(fetchReplay).toHaveBeenCalledTimes(1);
     fireEvent.click(watch);
 
-    expect(await screen.findByRole("dialog", { name: "Session replay" })).toBeVisible();
+    expect(
+      await screen.findByRole("dialog", { name: "Page-load recording" }),
+    ).toBeVisible();
     await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(2));
     expect(fetchReplay).toHaveBeenLastCalledWith(
       "/api/replays/sol_dab46ee6c619545d0534?runId=llr_123e4567-e89b-42d3-a456-426614174000&country=us&attempt=1&mode=events",
@@ -132,7 +144,7 @@ describe("ReplayLink", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(await screen.findByText("Replay ready")).toBeVisible();
+    expect(await screen.findByText("Recording ready")).toBeVisible();
   });
 
   it("fails closed for replay JSON that exposes a provider URL", async () => {
@@ -152,8 +164,10 @@ describe("ReplayLink", () => {
       </StrictMode>,
     );
 
-    expect(await screen.findByText("Replay unavailable")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Watch replay" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Recording unavailable")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "View page-load recording" }),
+    ).not.toBeInTheDocument();
   });
 
   it("aborts an unresolved lookup when unmounted", async () => {
@@ -188,7 +202,11 @@ describe("ReplayLink", () => {
     vi.stubGlobal("fetch", fetchReplay);
 
     const { rerender } = render(<ReplayLink correlation={correlation} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Watch replay" }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "View page-load recording",
+      }),
+    );
     await waitFor(() => expect(fetchReplay).toHaveBeenCalledTimes(2));
 
     rerender(
@@ -202,6 +220,8 @@ describe("ReplayLink", () => {
     );
 
     await waitFor(() => expect(replaySignal?.aborted).toBe(true));
-    expect(screen.queryByRole("dialog", { name: "Session replay" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Page-load recording" }),
+    ).not.toBeInTheDocument();
   });
 });

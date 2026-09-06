@@ -1,7 +1,12 @@
 # LocaleLens Planning Documents
 
-This directory contains the private, phased build record for LocaleLens. The Live Product Readiness successor is implemented locally, its non-live gate passes, and its live UI-only provider proof is not run because no runtime key was available.
+This directory preserves the phased build record for LocaleLens. The current
+product is the live-only, user-owned-key application under `examples/localelens-web`.
+Older phase documents retain their original sample-mode assumptions and evidence;
+they are historical records, not current setup instructions.
 
-Start with [`EXECUTION_INDEX.md`](EXECUTION_INDEX.md), then read the active design, plan, and qualified evidence linked there.
+Reviewers should start with the [app README](../examples/localelens-web/README.md)
+and [submission handoff](../examples/localelens-web/docs/submission/reviewer-handoff.md).
+The [`EXECUTION_INDEX.md`](EXECUTION_INDEX.md) links the build history and current design.
 
 Nothing in this directory authorizes a public push, deployment, social post, or live provider call.

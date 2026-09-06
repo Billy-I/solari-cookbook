@@ -223,9 +223,11 @@ export function ReplayLink({ correlation }: ReplayLinkProps) {
         <>
           <button className="replay-link" onClick={loadReplay} type="button">
             <Play aria-hidden="true" size={16} />
-            Watch replay
+            View page-load recording
           </button>
-          <p className="replay-help">Open a visual recording with playback controls.</p>
+          <p className="replay-help">
+            Review how the page rendered after its initial load.
+          </p>
         </>
       ) : result.status === "pending" ? (
         <>
@@ -236,7 +238,7 @@ export function ReplayLink({ correlation }: ReplayLinkProps) {
               ) : (
                 <Clock3 aria-hidden="true" size={16} />
               )}
-              {checking ? "Checking replay" : "Replay pending"}
+              {checking ? "Checking recording" : "Recording pending"}
             </span>
             <button
               className="secondary-action"
@@ -245,18 +247,22 @@ export function ReplayLink({ correlation }: ReplayLinkProps) {
               type="button"
             >
               <RotateCcw aria-hidden="true" size={16} />
-              Check replay availability
+              Check recording availability
             </button>
           </div>
-          <p className="replay-help">Solari is preparing the visual recording.</p>
+          <p className="replay-help">
+            Solari is preparing the page-load recording.
+          </p>
         </>
       ) : (
         <>
           <span className="replay-state">
             <Unlink aria-hidden="true" size={16} />
-            Replay unavailable
+            Recording unavailable
           </span>
-          <p className="replay-help">No visual recording is available for this capture.</p>
+          <p className="replay-help">
+            No page-load recording is available for this capture.
+          </p>
         </>
       )}
 
